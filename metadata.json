@@ -1,0 +1,7 @@
+{
+  "name": "Perangkat Pembelajaran SD Negeri 5 Bilato",
+  "description": "Aplikasi manajemen Capaian Pembelajaran (CP) dan Alur Tujuan Pembelajaran (ATP) interaktif untuk guru SD Negeri 5 Bilato, dilengkapi dengan bantuan AI untuk menyusun perangkat ajar.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

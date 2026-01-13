@@ -50,7 +50,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
 
     try {
       if (!chatInstance.current) {
-        // Injeksi API Key User
+        // Mengirimkan apiKey user ke layanan AI
         chatInstance.current = await startAIChat(
           `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`,
           user.apiKey
@@ -82,7 +82,10 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
       <div className="p-5 bg-slate-900 text-white flex justify-between items-center shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-500 rounded-xl"><SparklesIcon size={18} /></div>
-          <div><h3 className="text-xs font-black uppercase tracking-widest leading-none">Asisten AI</h3><span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{user.apiKey ? 'KUNCI KUSTOM AKTIF' : 'KUNCI SEKOLAH AKTIF'}</span></div>
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-widest leading-none">Asisten AI</h3>
+            {user.apiKey && <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">Private API Key Active</p>}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={resetChat} className="p-2 hover:bg-white/10 rounded-lg text-slate-400"><ClearIcon size={16}/></button>

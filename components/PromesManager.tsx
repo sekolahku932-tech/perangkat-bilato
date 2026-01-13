@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Fase, Kelas, PromesItem, ProtaItem, ATPItem, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, AcademicYear, EventKalender, JadwalItem, User, LIST_SEKOLAH } from '../types';
+import { Fase, Kelas, PromesItem, ProtaItem, ATPItem, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, AcademicYear, EventKalender, JadwalItem, User } from '../types';
 import { Plus, Trash2, Save, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, CalendarRange, Clock, Zap, CalendarDays, ClipboardCheck, Cloud, Loader2, FileDown, Printer, AlertTriangle, X, Lock } from 'lucide-react';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from '../services/firebase';
 
@@ -32,15 +32,11 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [settings, setSettings] = useState<SchoolSettings>(() => {
-    const savedId = localStorage.getItem('selectedSchoolId');
-    const school = LIST_SEKOLAH.find(s => s.id === savedId);
-    return {
-      schoolName: school?.name || 'SD NEGERI BILATO',
-      address: 'Kecamatan Bilato, Kabupaten Gorontalo',
-      principalName: 'Nama Kepala Sekolah',
-      principalNip: '-'
-    };
+  const [settings, setSettings] = useState<SchoolSettings>({
+    schoolName: 'SD NEGERI 5 BILATO',
+    address: 'Kecamatan Bilato, Kabupaten Gorontalo',
+    principalName: 'Nama Kepala Sekolah',
+    principalNip: '-'
   });
 
   useEffect(() => {
@@ -136,7 +132,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak PROMES - ${settings.schoolName}</title>
+            <title>Cetak PROMES - SDN 5 Bilato</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
               body { font-family: 'Times New Roman', serif; background: white; padding: 10px; font-size: 8pt; }
@@ -351,7 +347,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
               ))}
             </tbody>
           </table>
-          <div className="mt-16 flex justify-between items-start text-[10px] px-12 font-sans uppercase font-black tracking-tighter break-inside-avoid">
+          <div className="mt-16 flex justify-between items-start text-[10px] px-12 font-sans uppercase font-black tracking-tighter">
             <div className="text-center w-72"><p>Mengetahui,</p> <p>Kepala Sekolah</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p> <p className="no-underline mt-1 font-normal">NIP. {settings.principalNip}</p></div>
             <div className="text-center w-72"><p>Bilato, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p> <p>Guru Kelas/Mapel</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{user?.name || '[Nama Guru]'}</p> <p className="no-underline mt-1 font-normal">NIP. {user?.nip || '...................'}</p></div>
           </div>
@@ -413,6 +409,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div className="flex flex-wrap gap-2">
             <button onClick={() => handleAddRow('TP')} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-indigo-700 transition-all"><Plus size={16} /> TP BARU</button>
+            {/* FIX: Fixed truncated line and corrected type argument */}
             <button onClick={() => handleAddRow('ASESMEN')} className="bg-amber-500 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-amber-600 transition-all"><AlertCircle size={16} /> ASESMEN BARU</button>
             <button onClick={importFromProta} disabled={loading} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-xl transition-all disabled:opacity-50">{loading ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />} AMBIL DARI PROTA</button>
           </div>

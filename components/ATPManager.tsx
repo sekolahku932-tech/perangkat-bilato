@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User, DIMENSI_PROFIL } from '../types';
-import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree } from 'lucide-react';
+import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User } from '../types';
+import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle } from 'lucide-react';
 import { completeATPDetails } from '../services/geminiService';
-import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from '../services/firebase';
+import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
 interface ATPManagerProps {
   user: User;
@@ -15,51 +15,202 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   const [allAnalisis, setAllAnalisis] = useState<AnalisisCP[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
-  const [editModalItem, setEditModalItem] = useState<ATPItem | null>(null);
-
+  const [isPrintMode, setIsPrintMode] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  
   const [filterFase, setFilterFase] = useState<Fase>(Fase.A);
   const [filterKelas, setFilterKelas] = useState<Kelas>('1');
   const [filterMapel, setFilterMapel] = useState<string>(MATA_PELAJARAN[0]);
+  
+  const [settings, setSettings] = useState<SchoolSettings>({
+    schoolName: user.school,
+    address: '-',
+    principalName: '-',
+    principalNip: '-'
+  });
+
+  const [activeYear, setActiveYear] = useState('2024/2025');
+  const printRef = useRef<HTMLDivElement>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user.role === 'guru') {
+      if (user.kelas !== '-' && user.kelas !== 'Multikelas') {
+        setFilterKelas(user.kelas as Kelas);
+        updateFaseByKelas(user.kelas as Kelas);
+      }
+      if (user.mapelDiampu && user.mapelDiampu.length > 0) {
+        if (!user.mapelDiampu.includes(filterMapel)) {
+          setFilterMapel(user.mapelDiampu[0]);
+        }
+      }
+    }
+  }, [user]);
+
+  const updateFaseByKelas = (kls: Kelas) => {
+    if (['1', '2'].includes(kls)) setFilterFase(Fase.A);
+    else if (['3', '4'].includes(kls)) setFilterFase(Fase.B);
+    else if (['5', '6'].includes(kls)) setFilterFase(Fase.C);
+  };
+
+  const handleKelasChange = (kls: Kelas) => {
+    setFilterKelas(kls);
+    updateFaseByKelas(kls);
+  };
 
   useEffect(() => {
     setLoading(true);
-    const unsubATP = onSnapshot(collection(db, "atp"), (snap) => {
+    // ISOLASI: Dokumen settings sekolah
+    const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
+      if (snap.exists()) setSettings(snap.data() as SchoolSettings);
+    });
+
+    const unsubYears = onSnapshot(collection(db, "academic_years"), (snap) => {
+      const active = snap.docs.find((d: any) => d.data().isActive);
+      if (active) setActiveYear(active.data().year);
+    });
+
+    // ISOLASI: Filter semua koleksi berdasarkan sekolah
+    const qAtp = query(collection(db, "atp"), where("school", "==", user.school));
+    const unsubATP = onSnapshot(qAtp, (snap) => {
       setAtpData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
+    });
+
+    const qCp = query(collection(db, "cps"), where("school", "==", user.school));
+    const unsubCp = onSnapshot(qCp, snap => {
+      setCps(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
+    });
+
+    const qAnalisis = query(collection(db, "analisis"), where("school", "==", user.school));
+    const unsubAnalisis = onSnapshot(qAnalisis, snap => {
+      setAllAnalisis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AnalisisCP[]);
       setLoading(false);
     });
-    return () => unsubATP();
-  }, []);
+
+    return () => { unsubSettings(); unsubYears(); unsubATP(); unsubCp(); unsubAnalisis(); };
+  }, [user.school]);
+
+  const filteredAtp = useMemo(() => {
+    return atpData
+      .filter(item => item.fase === filterFase && item.kelas === filterKelas && item.mataPelajaran === filterMapel)
+      .sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
+  }, [atpData, filterFase, filterKelas, filterMapel]);
+
+  const handleSyncFromAnalisis = async () => {
+    setLoading(true);
+    try {
+      const sourceAnalisis = allAnalisis.filter(a => 
+        a.fase === filterFase && 
+        a.kelas === filterKelas && 
+        a.mataPelajaran.trim().toLowerCase() === filterMapel.trim().toLowerCase()
+      );
+
+      if (sourceAnalisis.length === 0) {
+        setMessage({ text: 'Tidak ada analisis di sekolah ini.', type: 'error' });
+        setLoading(false);
+        return;
+      }
+
+      let count = 0;
+      for (const a of sourceAnalisis) {
+        const alreadyExists = atpData.some(atp => 
+          atp.tujuanPembelajaran === a.tujuanPembelajaran && 
+          atp.kelas === filterKelas && 
+          atp.mataPelajaran === filterMapel
+        );
+
+        if (!alreadyExists) {
+          const cpInfo = cps.find(cp => cp.id === a.cpId);
+          await addDoc(collection(db, "atp"), {
+            fase: a.fase,
+            kelas: a.kelas,
+            mataPelajaran: a.mataPelajaran,
+            elemen: cpInfo?.elemen || '-',
+            capaianPembelajaran: cpInfo?.deskripsi || '-',
+            materi: a.materi,
+            subMateri: a.subMateri || '',
+            tujuanPembelajaran: a.tujuanPembelajaran,
+            alurTujuanPembelajaran: '',
+            alokasiWaktu: '',
+            dimensiProfilLulusan: '',
+            asesmenAwal: '',
+            asesmenProses: '',
+            asesmenAkhir: '',
+            sumberBelajar: '',
+            indexOrder: a.indexOrder || 0,
+            school: user.school // ISOLASI
+          });
+          count++;
+        }
+      }
+      setMessage({ text: `Berhasil sinkronisasi ${count} TP.`, type: 'success' });
+    } catch (err) {
+      setMessage({ text: 'Gagal.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAIComplete = async (id: string) => {
     const item = atpData.find(i => i.id === id);
     if (!item || !item.tujuanPembelajaran) return;
     setIsProcessingId(id);
     try {
-      // Injeksi API Key User
+      // Menggunakan apiKey user jika ada
       const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas, user.apiKey);
       if (suggestions) {
         await updateDoc(doc(db, "atp", id), {
           alurTujuanPembelajaran: suggestions.alurTujuan,
-          alokasiWaktu: item.alokasiWaktu || suggestions.alokasiWaktu,
-          dimensiProfilLulusan: item.dimensiProfilLulusan || suggestions.dimensiOfProfil,
-          asesmenAwal: item.asesmenAwal || suggestions.asesmenAwal,
-          asesmenProses: item.asesmenProses || suggestions.asesmenProses,
-          asesmenAkhir: item.asesmenAkhir || suggestions.asesmenAkhir,
-          sumberBelajar: item.sumberBelajar || suggestions.sumberBelajar
+          alokasiWaktu: suggestions.alokasiWaktu,
+          dimensiProfilLulusan: suggestions.dimensiOfProfil,
+          asesmenAwal: suggestions.asesmenAwal,
+          asesmenProses: suggestions.asesmenProses,
+          asesmenAkhir: suggestions.asesmenAkhir,
+          sumberBelajar: suggestions.sumberBelajar
         });
-        alert('Detail ATP dilengkapi AI');
+        setMessage({ text: 'Detail ATP dilengkapi AI.', type: 'success' });
       }
     } catch (err) {
-      alert('Gagal menghubungi AI. Cek kuota API Key Anda.');
+      setMessage({ text: 'Gagal AI.', type: 'error' });
     } finally { setIsProcessingId(null); }
   };
 
-  const filteredAtp = useMemo(() => {
-    return atpData.filter(item => item.fase === filterFase && item.kelas === filterKelas && item.mataPelajaran === filterMapel);
-  }, [atpData, filterFase, filterKelas, filterMapel]);
-
   const updateField = async (id: string, field: keyof ATPItem, value: any) => {
     try { await updateDoc(doc(db, "atp", id), { [field]: value }); } catch (e) { console.error(e); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteDoc(doc(db, "atp", deleteConfirmId));
+      setDeleteConfirmId(null);
+    } catch (e) { console.error(e); }
+  };
+
+  const handlePrint = () => {
+    const content = printRef.current?.innerHTML;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>ATP - ${user.school}</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+            <style>
+              body { font-family: 'Inter', sans-serif; background: white; padding: 40px; }
+              @media print { .no-print { display: none !important; } body { padding: 0; } }
+              table { border-collapse: collapse; }
+              .break-inside-avoid { page-break-inside: avoid; }
+            </style>
+          </head>
+          <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">
+            ${content}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
   };
 
   const isClassLocked = user.role === 'guru' && user.teacherType === 'kelas';
@@ -67,63 +218,128 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
+      {message && (
+        <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all animate-in slide-in-from-right ${
+          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'
+        }`}>
+          {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
+          <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>
+        </div>
+      )}
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
+              <h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus ATP</h3>
+              <p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris ATP ini dari database sekolah Anda?</p>
+            </div>
+            <div className="p-4 bg-slate-50 flex gap-3">
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition-all">BATAL</button>
+              <button onClick={handleDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 transition-all shadow-lg">YA, HAPUS</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
            <div className="flex items-center gap-3">
               <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><ListTree size={24} /></div>
               <div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">ALUR TUJUAN PEMBELAJARAN</h2>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{user.apiKey ? 'Personal Key Active' : 'System Key Active'}</p>
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">Alur Tujuan Pembelajaran (ATP)</h2>
+                <p className="text-[10px] text-blue-600 font-black uppercase mt-1">Tenant: {user.school}</p>
               </div>
+           </div>
+           <div className="flex flex-wrap gap-2">
+             <button onClick={handleSyncFromAnalisis} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg">
+                <Copy size={16}/> AMBIL DARI ANALISIS
+             </button>
+             <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg">
+                <Printer size={16}/> PRATINJAU
+             </button>
            </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-[24px] border border-slate-100">
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Fase {isClassLocked && <Lock size={10} className="text-amber-500" />}</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest flex items-center gap-1">Fase {isClassLocked && <Lock size={10} className="text-amber-500" />}</label>
             <select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none disabled:bg-slate-100" value={filterFase} disabled={isClassLocked} onChange={(e) => setFilterFase(e.target.value as Fase)}>
               {Object.values(Fase).map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Pilih Kelas</label>
-            <select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterKelas} disabled={isClassLocked} onChange={(e) => setFilterKelas(e.target.value as Kelas)}>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest flex items-center gap-1">Kelas</label>
+            <select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none disabled:bg-slate-100" value={filterKelas} disabled={isClassLocked} onChange={(e) => handleKelasChange(e.target.value as Kelas)}>
               {['1','2','3','4','5','6'].map(k => <option key={k} value={k}>Kelas {k}</option>)}
             </select>
           </div>
-          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] shadow-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-[40px] shadow-xl border border-slate-200 overflow-hidden min-h-[500px]">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1500px]">
+          <table className="w-full text-left border-collapse min-w-[2000px]">
             <thead>
-              <tr className="bg-slate-900 text-white text-[11px] font-black h-16 uppercase tracking-widest">
-                <th className="px-6 py-4">Tujuan Pembelajaran (TP)</th>
-                <th className="px-6 py-4">Alur Tujuan (ATP)</th>
-                <th className="px-6 py-4 w-56">Materi</th>
-                <th className="px-6 py-4 w-28 text-center">Aksi AI</th>
+              <tr className="bg-slate-900 text-white text-[10px] font-black h-16 uppercase tracking-widest">
+                <th className="px-6 py-4 w-16 text-center">No</th>
+                <th className="px-6 py-4 w-72">Elemen & CP</th>
+                <th className="px-6 py-4 w-64">Tujuan Pembelajaran (TP)</th>
+                <th className="px-6 py-4 w-80">Alur Tujuan (ATP)</th>
+                <th className="px-6 py-4 w-48">Materi & AW</th>
+                <th className="px-6 py-4 w-64">Profil Lulusan</th>
+                <th className="px-6 py-4 w-80">Rencana Asesmen</th>
+                <th className="px-6 py-4 w-32 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredAtp.map((item) => (
-                <tr key={item.id} className="align-top group hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-6 border-r border-slate-100">
-                    <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-900 leading-relaxed resize-none p-0 h-24" value={item.tujuanPembelajaran} onChange={e => updateField(item.id, 'tujuanPembelajaran', e.target.value)} />
-                  </td>
-                  <td className="px-6 py-6 border-r border-slate-100 bg-blue-50/10">
-                    <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-blue-900 leading-loose resize-none p-0 h-40 whitespace-pre-line" value={item.alurTujuanPembelajaran} onChange={e => updateField(item.id, 'alurTujuanPembelajaran', e.target.value)} />
-                  </td>
-                  <td className="px-6 py-6 border-r border-slate-100">
-                    <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black uppercase mb-2" value={item.materi} placeholder="Materi" onChange={e => updateField(item.id, 'materi', e.target.value)} />
-                  </td>
-                  <td className="px-6 py-6 text-center">
-                    <button onClick={() => handleAIComplete(item.id)} disabled={isProcessingId === item.id} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-xl hover:bg-indigo-700 disabled:opacity-50">
-                      {isProcessingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} AI
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {loading ? (
+                <tr><td colSpan={8} className="py-20 text-center"><Loader2 className="animate-spin inline-block text-blue-600" /></td></tr>
+              ) : filteredAtp.length === 0 ? (
+                <tr><td colSpan={8} className="px-6 py-24 text-center text-slate-400 italic font-bold uppercase text-xs">Data ATP untuk {user.school} kosong.</td></tr>
+              ) : (
+                filteredAtp.map((item, idx) => (
+                  <tr key={item.id} className="align-top group hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-6 text-center font-black text-slate-300">{idx + 1}</td>
+                    <td className="px-6 py-6 border-r border-slate-50">
+                      <div className="font-black text-[10px] text-blue-600 uppercase mb-2">{item.elemen}</div>
+                      <div className="text-[10px] text-slate-400 italic leading-relaxed">{item.capaianPembelajaran}</div>
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50">
+                      <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-900 leading-relaxed resize-none p-0 h-32" value={item.tujuanPembelajaran} onChange={e => updateField(item.id, 'tujuanPembelajaran', e.target.value)} />
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50 bg-blue-50/10">
+                      <textarea className="w-full bg-transparent border-none focus:ring-0 text-xs font-medium text-blue-900 leading-relaxed resize-none p-0 h-32" value={item.alurTujuanPembelajaran} onChange={e => updateField(item.id, 'alurTujuanPembelajaran', e.target.value)} placeholder="Tulis atau gunakan AI..." />
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50">
+                      <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black uppercase mb-2" value={item.materi} onChange={e => updateField(item.id, 'materi', e.target.value)} placeholder="Materi" />
+                      <div className="flex items-center gap-2">
+                        <input className="w-20 bg-slate-900 text-white border-none rounded-lg p-2 text-center text-xs font-black" value={item.alokasiWaktu} onChange={e => updateField(item.id, 'alokasiWaktu', e.target.value)} placeholder="JP" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase">JP</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50">
+                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-bold text-slate-600 leading-relaxed resize-none p-0 h-32" value={item.dimensiProfilLulusan} onChange={e => updateField(item.id, 'dimensiProfilLulusan', e.target.value)} />
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50 space-y-2">
+                       <div><label className="text-[8px] font-black text-slate-400 uppercase">Awal</label><input className="w-full bg-slate-50 border border-slate-100 p-2 rounded text-[10px]" value={item.asesmenAwal} onChange={e => updateField(item.id, 'asesmenAwal', e.target.value)} /></div>
+                       <div><label className="text-[8px] font-black text-slate-400 uppercase">Proses</label><input className="w-full bg-slate-50 border border-slate-100 p-2 rounded text-[10px]" value={item.asesmenProses} onChange={e => updateField(item.id, 'asesmenProses', e.target.value)} /></div>
+                       <div><label className="text-[8px] font-black text-slate-400 uppercase">Akhir</label><input className="w-full bg-slate-50 border border-slate-100 p-2 rounded text-[10px]" value={item.asesmenAkhir} onChange={e => updateField(item.id, 'asesmenAkhir', e.target.value)} /></div>
+                    </td>
+                    <td className="px-6 py-6 text-center">
+                      <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleAIComplete(item.id)} disabled={isProcessingId === item.id} className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 shadow-lg disabled:opacity-50">
+                          {isProcessingId === item.id ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
+                        </button>
+                        <button onClick={() => setDeleteConfirmId(item.id)} className="bg-red-50 text-red-600 p-3 rounded-xl hover:bg-red-600 hover:text-white transition-all">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -10,7 +10,8 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
   const navItems = [
     { id: AppView.DASHBOARD, label: 'Dashboard', icon: '📊' },
-    { id: AppView.ANALYSIS, label: 'Analisis Dokumen', icon: '📄' },
+    // Fix: Corrected typo from ANALYSIS to ANALISIS to match the definition in types.ts
+    { id: AppView.ANALISIS, label: 'Analisis Dokumen', icon: '📄' },
     { id: AppView.GENERATOR, label: 'Generator Perangkat', icon: '✨' },
   ];
 

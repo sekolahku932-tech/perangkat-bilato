@@ -7,31 +7,16 @@ export enum Fase {
 
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
-  ANALYSIS = 'ANALISIS',
+  ANALISIS = 'ANALISIS',
   GENERATOR = 'GENERATOR',
   DOKUMEN = 'DOKUMEN'
 }
 
 export type Kelas = '1' | '2' | '3' | '4' | '5' | '6';
+
 export type Role = 'admin' | 'guru';
+
 export type TeacherType = 'kelas' | 'mapel';
-
-export interface School {
-  id: string;
-  name: string;
-  color: string;
-}
-
-export const LIST_SEKOLAH: School[] = [
-  { id: 'sdn1', name: 'SD NEGERI 1 BILATO', color: 'blue' },
-  { id: 'sdn2', name: 'SD NEGERI 2 BILATO', color: 'indigo' },
-  { id: 'sdn3', name: 'SD NEGERI 3 BILATO', color: 'violet' },
-  { id: 'sdn4', name: 'SD NEGERI 4 BILATO', color: 'emerald' },
-  { id: 'sdn5', name: 'SD NEGERI 5 BILATO', color: 'rose' },
-  { id: 'sdn6', name: 'SD NEGERI 6 BILATO', color: 'amber' },
-  { id: 'sdn7', name: 'SD NEGERI 7 BILATO', color: 'cyan' },
-  { id: 'sdn8', name: 'SD NEGERI 8 BILATO', color: 'slate' },
-];
 
 export interface User {
   id: string;
@@ -42,9 +27,9 @@ export interface User {
   name: string;
   nip: string;
   kelas: string;
+  school: string; // The school this user belongs to
   mapelDiampu: string[];
-  apiKey?: string;
-  schoolId?: string;
+  apiKey?: string; // Kunci API Gemini pribadi milik user
 }
 
 export interface Siswa {
@@ -52,6 +37,7 @@ export interface Siswa {
   nis: string;
   name: string;
   kelas: Kelas;
+  school: string;
 }
 
 export interface UploadedFile {
@@ -74,6 +60,7 @@ export interface AsesmenNilai {
   tpId: string;
   nilai: number;
   catatan?: string;
+  school: string;
 }
 
 export interface AsesmenInstrumen {
@@ -84,6 +71,7 @@ export interface AsesmenInstrumen {
   tpId: string;
   tujuanPembelajaran: string;
   rubrik: string;
+  school: string;
 }
 
 export interface JurnalItem {
@@ -92,6 +80,7 @@ export interface JurnalItem {
   userName: string;
   tahunPelajaran: string;
   kelas: Kelas;
+  school: string;
   tanggal: string;
   mataPelajaran: string;
   materi: string;
@@ -117,9 +106,11 @@ export interface KisiKisiItem {
   jenis: 'Tes' | 'Non Tes';
   bentukSoal: string;
   stimulus: string;
+  stimulusImage?: string; // Properti baru untuk menyimpan base64 gambar AI
   soal: string;
   kunciJawaban: string;
   nomorSoal: number;
+  school: string;
 }
 
 export interface SchoolSettings {
@@ -138,6 +129,7 @@ export interface AcademicYear {
 export interface HariEfektif {
   id: string;
   kelas: Kelas;
+  school: string;
   semester: 1 | 2;
   bulan: string;
   jumlahMinggu: number;
@@ -159,6 +151,7 @@ export interface JadwalItem {
   jamKe: number;
   mapel: string;
   kelas: Kelas;
+  school: string;
 }
 
 export interface CapaianPembelajaran {
@@ -180,6 +173,7 @@ export interface AnalisisCP {
   subMateri: string;
   tujuanPembelajaran: string;
   indexOrder: number;
+  school: string;
 }
 
 export interface ATPItem {
@@ -200,6 +194,7 @@ export interface ATPItem {
   asesmenAkhir: string;
   sumberBelajar: string;
   indexOrder: number;
+  school: string;
 }
 
 export interface ProtaItem {
@@ -213,6 +208,7 @@ export interface ProtaItem {
   jp: string;
   semester: '1' | '2';
   indexOrder: number;
+  school: string;
 }
 
 export interface PromesItem {
@@ -229,6 +225,7 @@ export interface PromesItem {
   jadwalMingguan: Record<string, number[]>;
   keterangan: string;
   indexOrder?: number;
+  school: string;
 }
 
 export interface RPMItem {
@@ -254,6 +251,8 @@ export interface RPMItem {
   kegiatanInti: string;
   kegiatanPenutup: string;
   asesmenTeknik: string;
+  materiAjar: string;
+  school: string;
 }
 
 export interface LKPDItem {
@@ -266,16 +265,29 @@ export interface LKPDItem {
   judul: string;
   tujuanPembelajaran: string;
   petunjuk: string;
+  alatBahan: string;
   materiRingkas: string;
   langkahKerja: string;
   tugasMandiri: string;
   refleksi: string;
   jumlahPertemuan: number;
+  school: string;
 }
+
+export const DAFTAR_SEKOLAH = [
+  'SD NEGERI 1 BILATO',
+  'SD NEGERI 2 BILATO',
+  'SD NEGERI 3 BILATO',
+  'SD NEGERI 4 BILATO',
+  'SD NEGERI 5 BILATO',
+  'SD NEGERI 6 BILATO',
+  'SD NEGERI 7 BILATO',
+  'SD NEGERI 8 BILATO'
+];
 
 export const MATA_PELAJARAN = [
   'Pendidikan Agama dan Budi Pekerti',
-  'Pendidikan Pancasila',
+  'Pendidikan Pancasilan',
   'Bahasa Indonesia',
   'Matematika',
   'IPAS',
@@ -284,7 +296,11 @@ export const MATA_PELAJARAN = [
   'Bahasa Inggris',
   'Koding dan KA',
   'Mulok',
-  'Kokurikuler',
+  'Kokurikuler'
+];
+
+export const SEMUA_AKTIVITAS = [
+  ...MATA_PELAJARAN,
   'Istirahat',
   'Upacara/Apel'
 ];

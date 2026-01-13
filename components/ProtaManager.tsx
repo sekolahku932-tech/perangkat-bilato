@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Fase, Kelas, ProtaItem, MATA_PELAJARAN, ATPItem, CapaianPembelajaran, SchoolSettings, User, LIST_SEKOLAH } from '../types';
+import { Fase, Kelas, ProtaItem, MATA_PELAJARAN, ATPItem, CapaianPembelajaran, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Save, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, Cloud, Loader2, AlertTriangle, FileDown, Printer, Lock } from 'lucide-react';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from '../services/firebase';
 
@@ -24,15 +24,11 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
 
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [settings, setSettings] = useState<SchoolSettings>(() => {
-    const savedId = localStorage.getItem('selectedSchoolId');
-    const school = LIST_SEKOLAH.find(s => s.id === savedId);
-    return {
-      schoolName: school?.name || 'SD NEGERI BILATO',
-      address: 'Kecamatan Bilato, Kabupaten Gorontalo',
-      principalName: 'Nama Kepala Sekolah',
-      principalNip: '-'
-    };
+  const [settings, setSettings] = useState<SchoolSettings>({
+    schoolName: 'SD NEGERI 5 BILATO',
+    address: 'Kecamatan Bilato, Kabupaten Gorontalo',
+    principalName: 'Nama Kepala Sekolah',
+    principalNip: '-'
   });
 
   const [activeYear, setActiveYear] = useState('..../....');
@@ -115,7 +111,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak PROTA - ${settings.schoolName}</title>
+            <title>Cetak PROTA - SDN 5 Bilato</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>

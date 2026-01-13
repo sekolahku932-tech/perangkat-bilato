@@ -13,12 +13,17 @@ const firebaseConfig = {
   measurementId: "G-JS2Z2JSNPV"
 };
 
+// Initialize Primary Firebase App
 const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+
+// Initialize Secondary App for User Registration (prevents admin logout)
+const secondaryApp = !firebase.apps.find(a => a.name === 'Secondary') 
+  ? firebase.initializeApp(firebaseConfig, 'Secondary') 
+  : firebase.app('Secondary');
+
 export const auth = firebase.auth();
 export const db = firebase.firestore();
-
-// Helper untuk mendapatkan prefix sekolah
-const getPrefix = () => localStorage.getItem('selectedSchoolId') || 'global';
+export const registerAuth = firebase.auth(secondaryApp); // Khusus pendaftaran
 
 // Shims for v9 modular Auth functions
 export const onAuthStateChanged = (authInstance: any, callback: any) => authInstance.onAuthStateChanged(callback);
@@ -31,7 +36,9 @@ const wrapSnapshot = (snap: any) => {
   if (typeof snap.exists === 'function') return snap;
   const existsVal = !!snap.exists;
   return {
-    id: snap.id, ref: snap.ref, metadata: snap.metadata,
+    id: snap.id,
+    ref: snap.ref,
+    metadata: snap.metadata,
     exists: () => existsVal,
     data: () => snap.data ? snap.data() : undefined,
     get: (field: string) => snap.get ? snap.get(field) : undefined,
@@ -39,22 +46,15 @@ const wrapSnapshot = (snap: any) => {
   };
 };
 
-/**
- * MODIFIKASI: Secara otomatis menambahkan prefix sekolah pada nama koleksi.
- * Contoh: collection(db, "users") menjadi collection(db, "sdn1_users")
- */
-export const collection = (dbInstance: any, path: string) => {
-  const namespacedPath = `${getPrefix()}_${path}`;
-  return dbInstance.collection(namespacedPath);
-};
-
+export const collection = (dbInstance: any, path: string) => dbInstance.collection(path);
 export const onSnapshot = (ref: any, onNext: any, onError?: any) => {
   return ref.onSnapshot((snap: any) => {
     if (snap.docs) {
       const wrappedDocs = snap.docs.map((d: any) => wrapSnapshot(d));
       onNext({
         docs: wrappedDocs,
-        size: snap.size, empty: snap.empty,
+        size: snap.size,
+        empty: snap.empty,
         forEach: (callback: any) => wrappedDocs.forEach((d: any) => callback(d)),
         docChanges: () => snap.docChanges(),
         metadata: snap.metadata
@@ -68,31 +68,15 @@ export const onSnapshot = (ref: any, onNext: any, onError?: any) => {
 export const addDoc = (ref: any, data: any) => ref.add(data);
 export const updateDoc = (ref: any, data: any) => ref.update(data);
 export const deleteDoc = (ref: any) => ref.delete();
-
 export const doc = (dbOrColl: any, pathOrId: string, id?: string) => {
-  if (id) {
-    // Jika pathOrId adalah nama koleksi, tambahkan namespace
-    const namespacedColl = `${getPrefix()}_${pathOrId}`;
-    return dbOrColl.collection(namespacedColl).doc(id);
-  }
-  
-  if (typeof dbOrColl.doc === 'function') {
-    // Jika ini adalah db.doc("koleksi/id")
-    const parts = pathOrId.split('/');
-    if (parts.length >= 1) {
-      parts[0] = `${getPrefix()}_${parts[0]}`;
-    }
-    return dbOrColl.doc(parts.join('/'));
-  }
-  
+  if (id) return dbOrColl.collection(pathOrId).doc(id);
+  if (typeof dbOrColl.doc === 'function') return dbOrColl.doc(pathOrId);
   return db.doc(pathOrId);
 };
-
 export const getDoc = async (ref: any) => {
   const snap = await ref.get();
   return wrapSnapshot(snap);
 };
-
 export const query = (ref: any, ...constraints: any[]) => {
   let q = ref;
   constraints.forEach(c => {
@@ -100,7 +84,9 @@ export const query = (ref: any, ...constraints: any[]) => {
   });
   return q;
 };
-
 export const where = (field: string, op: any, value: any) => ({ type: 'where', field, op, value });
 export const getDocs = (ref: any) => ref.get();
-export const setDoc = (ref: any, data: any, options?: any) => options ? ref.set(data, options) : ref.set(data);
+export const setDoc = (ref: any, data: any, options?: any) => {
+  if (options) return ref.set(data, options);
+  return ref.set(data);
+};

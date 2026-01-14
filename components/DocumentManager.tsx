@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UploadedFile, ChatMessage, User } from '../types';
 import { 
@@ -17,6 +16,7 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'warning' | 'error' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -65,12 +65,12 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
     setIsAnalyzing(true);
 
     try {
-      const response = await analyzeDocuments(files, currentInput, user.apiKey);
+      const response = await analyzeDocuments(files, currentInput);
       const aiMsg: ChatMessage = { role: 'model', content: response, timestamp: new Date() };
       setChatHistory(prev => [...prev, aiMsg]);
     } catch (error: any) {
       console.error(error);
-      let errMsg = "Maaf, terjadi kesalahan saat menganalisis.";
+      let errMsg = "Maaf, terjadi kesalahan saat menganalisis dokumen.";
       if (error.message === 'QUOTA_EXCEEDED') errMsg = "Kuota AI Anda saat ini sudah habis.";
       if (error.message === 'INVALID_API_KEY') errMsg = "API Key Anda tidak valid. Hubungi Admin.";
       
@@ -128,65 +128,71 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
           </div>
         </div>
 
-        {user.apiKey && (
-          <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2rem] flex items-center gap-4">
-             <div className="p-3 bg-white rounded-2xl text-emerald-600 shadow-sm"><Key size={20}/></div>
-             <div>
-                <p className="text-[10px] font-black uppercase text-emerald-800">API Key Aktif</p>
-                <p className="text-[8px] font-bold text-emerald-600 uppercase">Menggunakan Kunci Pribadi</p>
-             </div>
-          </div>
-        )}
+        <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2rem] flex items-center gap-4">
+           <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl"><Sparkles size={20}/></div>
+           <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-tight">AI Vision Engine Aktif</p>
+        </div>
       </div>
 
-      <div className="lg:col-span-3 flex flex-col h-[75vh] bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden relative">
-         <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-               <div className="p-2 bg-indigo-600 text-white rounded-xl"><MessageSquare size={20}/></div>
-               <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Analisis Dokumen Terpadu</h3>
-            </div>
-         </div>
-
-         <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar bg-white">
-            {chatHistory.length === 0 && (
-               <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-                  <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-600 animate-pulse">
-                     <Bot size={48} />
+      <div className="lg:col-span-3">
+        <div className="bg-white rounded-[48px] shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[650px]">
+          <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+             <div className="flex items-center gap-3">
+                <div className="p-2 bg-white rounded-xl shadow-sm"><MessageSquare size={18} className="text-indigo-600"/></div>
+                <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Ruang Analisis Kurikulum</h3>
+             </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar bg-white">
+            {chatHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-40">
+                 <Bot size={64} className="text-slate-300"/>
+                 <div className="max-w-xs">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Asisten Dokumen</p>
+                    <p className="text-[10px] font-medium leading-relaxed">Tanyakan apapun terkait file yang Anda unggah. AI dapat menganalisis teks, CP, RPP, atau gambar tugas siswa.</p>
+                 </div>
+              </div>
+            ) : (
+              chatHistory.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      {msg.role === 'user' ? <UserIcon size={18}/> : <Bot size={18}/>}
+                    </div>
+                    <div className={`p-5 rounded-3xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-50 text-slate-800 rounded-tl-none border border-slate-100'}`}>
+                       <div className="whitespace-pre-wrap">{msg.content}</div>
+                       <p className={`text-[8px] mt-3 font-black uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-300' : 'text-slate-400'}`}>
+                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                       </p>
+                    </div>
                   </div>
-                  <div>
-                     <h4 className="text-lg font-black text-slate-900 uppercase">Siap Menganalisis</h4>
-                     <p className="text-slate-400 text-xs font-medium max-w-xs mx-auto mt-2 uppercase tracking-widest leading-loose">Unggah dokumen perangkat ajar Anda, lalu ajukan pertanyaan seputar isinya.</p>
-                  </div>
-               </div>
+                </div>
+              ))
             )}
-            {chatHistory.map((msg, i) => (
-               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-                  <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm font-medium leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none shadow-xl shadow-indigo-100' : 'bg-slate-50 text-slate-700 rounded-tl-none border border-slate-100'}`}>
-                     {msg.content}
-                  </div>
-               </div>
-            ))}
             <div ref={chatEndRef} />
-         </div>
+          </div>
 
-         <div className="p-6 bg-white border-t border-slate-100">
-            <div className="relative">
-               <input 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-[2rem] py-5 pl-8 pr-16 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600 transition-all placeholder:text-slate-300"
-                  placeholder="Tanyakan temuan dalam dokumen..."
+          <div className="p-6 bg-slate-50 border-t border-slate-100">
+             <div className="relative flex items-center">
+                <input 
+                  type="text" 
+                  className="w-full bg-white border border-slate-200 rounded-[2rem] py-4 pl-6 pr-16 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
+                  placeholder="Ketik pertanyaan atau instruksi analisis..."
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-               />
-               <button 
+                  disabled={isAnalyzing}
+                />
+                <button 
                   onClick={handleSendMessage}
-                  disabled={isAnalyzing || files.length === 0 || !input.trim()}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-3.5 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-100 hover:bg-black transition-all disabled:opacity-30 active:scale-95"
-               >
-                  {isAnalyzing ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-               </button>
-            </div>
-         </div>
+                  disabled={!input.trim() || isAnalyzing}
+                  className="absolute right-2 p-2.5 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                >
+                  {isAnalyzing ? <Loader2 size={18} className="animate-spin"/> : <Send size={18} />}
+                </button>
+             </div>
+          </div>
+        </div>
       </div>
     </div>
   );

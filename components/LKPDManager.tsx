@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, LKPDItem, RPMItem, MATA_PELAJARAN, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Rocket, Sparkles, Loader2, CheckCircle2, Printer, Cloud, FileText, Split, AlertTriangle, FileDown, Wand2, PencilLine, Lock, Brain, Zap, RefreshCw, PenTool, Search, AlertCircle, X, ArrowRight, Hammer, Download } from 'lucide-react';
@@ -127,6 +126,7 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
       setShowRpmPicker(false);
       setIsEditing(docRef.id);
       setMessage({ text: 'LKPD Baru berhasil dibuat!', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (e) {
       setMessage({ text: 'Gagal membuat LKPD', type: 'error' });
     }
@@ -143,10 +143,11 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
 
     setIsLoadingAI(true);
     try {
-      const result = await generateLKPDContent(rpm, user.apiKey);
+      const result = await generateLKPDContent(rpm);
       if (result) {
         await updateDoc(doc(db, "lkpd", id), { ...result });
         setMessage({ text: 'Konten LKPD Sinkron dengan Langkah RPM!', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch (err: any) {
       console.error(err);
@@ -166,47 +167,31 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
       await deleteDoc(doc(db, "lkpd", deleteConfirmId));
       setDeleteConfirmId(null);
       setMessage({ text: 'LKPD Berhasil Dihapus!', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (e) { setMessage({ text: 'Gagal menghapus!', type: 'error' }); }
   };
 
   const splitByMeeting = (text: string, count: number) => {
     if (!text || text === '-') return Array(count).fill('');
-    
-    // Pattern penanda pertemuan yang lebih fleksibel
     const pattern = /Pertemuan\s*(\d+)\s*:?/gi;
     const parts = text.split(pattern);
-    
-    // Jika tidak ada penanda sama sekali tapi diminta lebih dari 1 pertemuan
     if (parts.length === 1 && count > 1) {
-      // Sebagai fallback, masukkan semuanya ke pertemuan 1
       const result = Array(count).fill('');
       result[0] = text;
       return result;
     }
-
-    // Jika pola split menghasilkan array ["text_sebelum_p1", "1", "isi_p1", "2", "isi_p2", ...]
     const result = Array(count).fill('');
-    
-    // Jika teks dimulai langsung dengan Pertemuan 1, parts[0] akan kosong
-    // Kita iterasi bagian-bagiannya
     for (let i = 0; i < parts.length; i++) {
         const p = parts[i].trim();
-        // Cek apakah p adalah angka penanda pertemuan
         const mNum = parseInt(p);
         if (!isNaN(mNum) && mNum > 0 && mNum <= count) {
-            // Isi yang mengikuti angka ini adalah konten untuk pertemuan tersebut
             result[mNum - 1] = (parts[i + 1] || '').trim();
-            i++; // Loncat ke konten berikutnya
+            i++;
         }
     }
-
-    // Fallback terakhir: jika hasil masih kosong semua di p2+ padahal teks aslinya ada isi
     if (count > 1 && result.slice(1).every(r => r === '') && text.length > 50) {
-       // Mungkin formatnya list biasa tanpa kata "Pertemuan"
-       // Kita biarkan pertemuan 1 berisi semuanya daripada kosong
        if (result[0] === '') result[0] = text;
     }
-
     return result;
   };
 
@@ -275,10 +260,9 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
     const materiParts = splitByMeeting(lkpd.materiRingkas, jPertemuan);
     const langkahParts = splitByMeeting(lkpd.langkahKerja, jPertemuan);
     const tugasParts = splitByMeeting(lkpd.tugasMandiri, jPertemuan);
-    const refleksiParts = splitByMeeting(lkpd.refleksi, jPertemuan);
 
     const renderListForWord = (text: string) => {
-      const parts = text.split(/\n+/).map(l => l.replace(/^(\d+[\.\)]|\-|\*|•)\s*/, '').trim()).filter(l => l.length > 0);
+      const parts = text.split(/\n/g).map(l => l.replace(/^(\d+[\.\)]|\-|\*|•)\s*/, '').trim()).filter(l => l.length > 0);
       if (parts.length <= 1) return text.replace(/\n/g, '<br/>');
       return parts.map((p, i) => `<div style="margin-bottom: 3px;">${i+1}. ${p}</div>`).join('');
     };
@@ -321,12 +305,15 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500 relative">
       {message && (
-        <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+        <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${
+          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+          message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+          'bg-red-50 border-red-200 text-red-800'
+        }`}>
           <CheckCircle2 size={20}/><span className="text-sm font-black uppercase tracking-tight">{message.text}</span>
         </div>
       )}
 
-      {/* Modal Konfirmasi Hapus */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95">
@@ -343,7 +330,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Picker RPM (Untuk Buat LKPD Baru) */}
       {showRpmPicker && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20 animate-in zoom-in-95">
@@ -368,7 +354,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Editor LKPD */}
       {isEditing && currentLKPD && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-7xl max-h-[95vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
@@ -420,7 +405,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Main Container */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col xl:flex-row gap-4 items-end">
          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
            <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Mapel</label><select className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-black" value={filterMapel} onChange={e => setFilterMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -457,7 +441,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
         ))}
       </div>
 
-      {/* Hidden Print Container */}
       <div className="hidden">
          <div ref={printRef} className="p-8 max-w-[21cm] mx-auto text-black">
             {currentLKPD && (

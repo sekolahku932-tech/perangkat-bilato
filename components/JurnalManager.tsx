@@ -29,6 +29,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
+  // Fix: Removed duplicate 'principalName' property in settings state initialization
   const [settings, setSettings] = useState<SchoolSettings>({
     schoolName: user.school,
     address: 'Jl. Trans Sulawesi, Kec. Bilato',
@@ -74,7 +75,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
 
     const qPromes = query(collection(db, "promes"), where("school", "==", user.school));
     const unsubPromes = onSnapshot(qPromes, (snapshot) => {
-      setPromesData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PromesItem[]);
+      setPromesData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as PromesItem[]);
     });
 
     return () => { unsubSettings(); unsubYears(); unsubJurnal(); unsubRpm(); unsubPromes(); };
@@ -151,6 +152,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
         }
       }
       setMessage({ text: `Berhasil mensinkronkan ${count} log jurnal dari Prosem.`, type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error(err);
       setMessage({ text: 'Gagal sinkronisasi data.', type: 'error' });
@@ -164,18 +166,20 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
   };
 
   const handleGenerateNarrative = async (item: JurnalItem) => {
+    // Fix: Removed apiKey check per GenAI guidelines
     setIsLoadingAI(item.id);
     try {
       const refRpm = rpmData.find(r => r.materi === item.materi && r.mataPelajaran === item.mataPelajaran);
-      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm, user.apiKey);
+      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm);
       if (result) {
         await updateDoc(doc(db, "jurnal_harian", item.id), {
-          detailKegiatan: result.detail_kegiatan,
+          detail_kegiatan: result.detail_kegiatan,
           praktikPedagogis: result.pedagogik
         });
         setMessage({ text: 'Narasi berhasil disusun AI!', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
       }
-    } catch (e: any) { setMessage({ text: 'Gagal memanggil AI.', type: 'error' }); } 
+    } catch (e: any) { setMessage({ text: 'Gagal memanggil AI. Periksa kuota API.', type: 'error' }); } 
     finally { setIsLoadingAI(null); }
   };
 
@@ -217,8 +221,9 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
       {message && (
         <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all animate-in slide-in-from-right ${
           message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+          message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
           message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
-          'bg-amber-50 border-amber-200 text-amber-800'
+          'bg-blue-50 border-blue-200 text-blue-800'
         }`}>
           {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
           <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>

@@ -6,25 +6,25 @@ const cleanJsonString = (str: string): string => {
   return str.replace(/```json/g, '').replace(/```/g, '').trim();
 };
 
-const getAiClient = (userApiKey?: string) => {
-  // Gunakan kunci user jika ada, jika tidak gunakan kunci default sistem
-  return new GoogleGenAI({ apiKey: userApiKey || process.env.API_KEY });
+const getAiClient = (apiKey?: string) => {
+  const finalKey = apiKey || process.env.API_KEY || "";
+  return new GoogleGenAI({ apiKey: finalKey });
 };
 
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
 const COMPLEX_MODEL = 'gemini-3-pro-preview'; 
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 
-export const startAIChat = async (systemInstruction: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const startAIChat = async (systemInstruction: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   return ai.chats.create({
     model: DEFAULT_MODEL,
     config: { systemInstruction, temperature: 0.7 },
   });
 };
 
-export const analyzeDocuments = async (files: UploadedFile[], prompt: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const analyzeDocuments = async (files: UploadedFile[], prompt: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const fileParts = files.map(file => ({
     inlineData: {
       data: file.base64.split(',')[1],
@@ -39,8 +39,8 @@ export const analyzeDocuments = async (files: UploadedFile[], prompt: string, us
   return response.text || "AI tidak memberikan respon.";
 };
 
-export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: string, kelas: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: string, kelas: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -63,8 +63,8 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
   return JSON.parse(cleanJsonString(response.text || '[]'));
 };
 
-export const completeATPDetails = async (tp: string, materi: string, kelas: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const completeATPDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const prompt = `Lengkapi detail ATP SD Kelas ${kelas}. TP: "${tp}" | Materi: "${materi}".`;
 
   const response = await ai.models.generateContent({
@@ -89,8 +89,8 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const recommendPedagogy = async (tp: string, alurAtp: string, materi: string, kelas: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const recommendPedagogy = async (tp: string, alurAtp: string, materi: string, kelas: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -108,9 +108,9 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
-  const prompt = `Susun Rencana Pembelajaran Mendalam (RPM) SD Kelas ${kelas} dengan sangat DETAIL dan TERURAI. 
+export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
+  const prompt = `Susun Rencana Pembelajaran Mendalam (RPM) SD Kelas ${kelas} dengan sangat DETAIL and TERURAI. 
   
   REFERENSI UTAMA:
   - TP: "${tp}"
@@ -153,8 +153,8 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const generateJournalNarrative = async (kelas: string, mapel: string, materi: string, refRpm?: any, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateJournalNarrative = async (kelas: string, mapel: string, materi: string, refRpm?: any, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   let prompt = `Bantu susun narasi jurnal harian guru SD Kelas ${kelas}. Mapel: ${mapel}. Topik: ${materi}.`;
   
   if (refRpm) {
@@ -178,8 +178,8 @@ export const generateJournalNarrative = async (kelas: string, mapel: string, mat
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: { 
@@ -216,8 +216,8 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
   return cleanJsonString(response.text || '[]');
 };
 
-export const generateLKPDContent = async (rpm: any, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const count = rpm.jumlahPertemuan || 1;
   const prompt = `Susun Lembar Kerja Peserta Didik (LKPD) SD yang LENGKAP untuk ${count} PERTEMUAN.
   
@@ -258,8 +258,8 @@ export const generateLKPDContent = async (rpm: any, userApiKey?: string) => {
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const generateIndikatorSoal = async (item: any, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateIndikatorSoal = async (item: any, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   const prompt = `Buatlah 1 kalimat Indikator Soal RINGKAS untuk SD Kelas ${item.kelas} berdasarkan TP berikut.
   
   TP: "${item.tujuanPembelajaran}"
@@ -274,8 +274,8 @@ export const generateIndikatorSoal = async (item: any, userApiKey?: string) => {
   return response.text || "";
 };
 
-export const generateButirSoal = async (item: any, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateButirSoal = async (item: any, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   
   let structureHint = "";
   if (item.bentukSoal === 'Menjodohkan') {
@@ -286,29 +286,39 @@ export const generateButirSoal = async (item: any, userApiKey?: string) => {
     - Kolom tengah kosongkan saja.
     `;
   } else if (item.bentukSoal === 'Pilihan Ganda Kompleks') {
-    structureHint = `
-    ATURAN PILIHAN GANDA KOMPLEKS:
-    Bentuk soal ini dapat berupa:
-    1. Memilih lebih dari 1 jawaban (Gunakan format daftar [] untuk pilihan).
-    2. Benar Salah (Gunakan format TABEL Markdown: | PERNYATAAN | BENAR | SALAH |).
-    3. Ya Tidak (Gunakan format TABEL Markdown: | PERNYATAAN | YA | TIDAK |).
-    
-    Pilih format yang paling relevan dengan indikator "${item.indikatorSoal}".
-    Jika format daftar [], berikan minimal 5 pilihan.
-    Jika format tabel, isi minimal 3-5 pernyataan.
-    `;
+    if (item.subBentukSoal === 'Multiple Answer') {
+      structureHint = `
+      VARIASI: Multiple Choice Multiple Answer (Soal AKM).
+      - Fokus pada literasi bacaan atau numerasi.
+      - Buat minimal 5 pernyataan/opsi yang menuntut analisis.
+      - Berikan tanda [] di depan setiap opsi.
+      - Instruksikan siswa untuk memilih SEMUA pernyataan yang benar (minimal 2 jawaban benar).
+      `;
+    } else {
+      structureHint = `
+      VARIASI: Asosiasi/Grid (Pernyataan Benar-Salah / Sesuai-Tidak Sesuai).
+      - WAJIB: Sajikan dalam tabel markdown 3 KOLOM SAJA: | Pernyataan | Benar | Salah |
+      - Jangan menambah kolom lain. 
+      - Berikan minimal 4 pernyataan kritis terkait stimulus.
+      - Instruksikan siswa untuk memberi tanda centang pada kolom Benar atau Salah.
+      `;
+    }
   }
 
-  const prompt = `Buatlah 1 butir soal Asesmen SD Kelas ${item.kelas} yang berkualitas tinggi sesuai Indikator.
+  const prompt = `Buatlah 1 butir soal Asesmen SD Kelas ${item.kelas} yang berkualitas tinggi (Level Hots/AKM) sesuai Indikator.
   
   INDIKATOR: "${item.indikatorSoal}"
-  BENTUK SOAL: "${item.bentukSoal}"
+  BENTUK SOAL: "${item.bentukSoal}" ${item.subBentukSoal ? `(Varian: ${item.subBentukSoal})` : ''}
   ${structureHint}
+  
+  PENTING UNTUK PG KOMPLEKS:
+  Jika numerasi, berikan angka-angka yang menantang (perkalian/pembagian/skala).
+  Jika literasi, berikan pilihan jawaban yang sangat mirip/mengecoh (distraktor kuat).
   
   OUTPUT DALAM JSON:
   - stimulus: (Optional) Narasi pendukung soal/instruksi khusus.
-  - soal: Kalimat soal lengkap dengan format yang diminta.
-  - kunci: Jawaban benar.`;
+  - soal: Kalimat soal lengkap dengan format yang diminta (Opsi/Tabel).
+  - kunci: Jawaban benar (Sebutkan semua kunci jika multiple answer).`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -328,11 +338,9 @@ export const generateButirSoal = async (item: any, userApiKey?: string) => {
   return JSON.parse(cleanJsonString(response.text || '{}'));
 };
 
-export const generateAiImage = async (context: string, kelas: Kelas, kunci?: string, userApiKey?: string) => {
-  const ai = getAiClient(userApiKey);
+export const generateAiImage = async (context: string, kelas: Kelas, kunci?: string, apiKey?: string) => {
+  const ai = getAiClient(apiKey);
   
-  // Prompt dioptimasi agar menghasilkan file yang lebih kecil (flat/clipart style) 
-  // namun tetap relevan untuk anak SD.
   let visualPrompt = `Ultra-simple, minimalist flat 2D vector clipart for primary school kids (SD Kelas ${kelas}). 
   Topic: ${context.substring(0, 200)}. `;
   

@@ -4,7 +4,8 @@ import {
   BookOpen, ListTree, FileText, 
   CalendarRange, Rocket, Users, GraduationCap, 
   LayoutDashboard, Cloud, CheckCircle2, ArrowRight,
-  BarChart3, Code, ClipboardList, School as SchoolIcon
+  BarChart3, Code, ClipboardList, School as SchoolIcon,
+  FileCheck
 } from 'lucide-react';
 import { db, collection, onSnapshot } from '../services/firebase';
 import { User } from '../types';
@@ -80,7 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate }) => {
     { id: 'PROTA', label: 'Program Tahunan', count: stats.prota, icon: <FileText />, color: 'violet' },
     { id: 'PROMES', label: 'Program Semester', count: stats.promes, icon: <CalendarRange />, color: 'rose' },
     { id: 'RPM', label: 'RPM Mendalam', count: stats.rpm, icon: <Rocket />, color: 'cyan' },
-    { id: 'ASESMEN_SUMATIF', label: 'Asesmen Sumatif', count: stats.kisikisi, icon: <BarChart3 />, color: 'indigo' },
+    { id: 'ASESMEN', label: 'Asesmen Sumatif', count: stats.kisikisi, icon: <FileCheck />, color: 'rose' },
     { id: 'USER', label: 'Basis Guru', count: stats.users, icon: <Users />, color: 'slate', adminOnly: true },
   ].filter(card => !card.adminOnly || user.role === 'admin');
 

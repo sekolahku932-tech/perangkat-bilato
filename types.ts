@@ -27,9 +27,9 @@ export interface User {
   name: string;
   nip: string;
   kelas: string;
-  school: string; // The school this user belongs to
+  school: string;
   mapelDiampu: string[];
-  apiKey?: string; // Kunci API Gemini pribadi milik user
+  apiKey?: string; // Menampung API Key pribadi guru
 }
 
 export interface Siswa {
@@ -105,8 +105,9 @@ export interface KisiKisiItem {
   indikatorSoal: string;
   jenis: 'Tes' | 'Non Tes';
   bentukSoal: string;
+  subBentukSoal?: 'Multiple Answer' | 'Grid'; // Sub-tipe PG Kompleks
   stimulus: string;
-  stimulusImage?: string; // Properti baru untuk menyimpan base64 gambar AI
+  stimulusImage?: string; 
   soal: string;
   kunciJawaban: string;
   nomorSoal: number;

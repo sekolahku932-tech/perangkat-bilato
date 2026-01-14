@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, CapaianPembelajaran, AnalisisCP, MATA_PELAJARAN, SchoolSettings, User } from '../types';
-import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen, CheckCircle2 } from 'lucide-react';
 import { analyzeCPToTP } from '../services/geminiService';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
@@ -19,6 +19,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
   const [filterMapel, setFilterMapel] = useState<string>(MATA_PELAJARAN[0]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
   
   const [settings, setSettings] = useState<SchoolSettings>({
     schoolName: user.school,
@@ -59,7 +60,6 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    // ISOLASI: Pengaturan sekolah spesifik
     const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
@@ -69,13 +69,11 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    // ISOLASI: CP spesifik sekolah
     const qCp = query(collection(db, "cps"), where("school", "==", user.school));
     const unsubCp = onSnapshot(qCp, snap => {
       setCps(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
     });
 
-    // ISOLASI: Analisis spesifik sekolah
     const qAnalisis = query(collection(db, "analisis"), where("school", "==", user.school));
     const unsubAnalisis = onSnapshot(qAnalisis, snap => {
       setAnalisis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AnalisisCP[]);
@@ -105,9 +103,15 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
   }, [cps]);
 
   const handleAnalyze = async (cp: CapaianPembelajaran) => {
+    // Validasi API Key
+    if (!user.apiKey) {
+      setMessage({ text: 'Akses AI Ditolak: Anda belum melengkapi API Key pribadi di Manajemen User.', type: 'warning' });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
-      // Menggunakan apiKey user jika terdaftar di database profil
       const results = await analyzeCPToTP(cp.deskripsi, cp.elemen, cp.fase, filterKelas, user.apiKey);
       if (results && Array.isArray(results)) {
         let lastOrder = filteredAnalisis.length > 0 ? Math.max(...filteredAnalisis.map(a => a.indexOrder || 0)) : 0;
@@ -122,13 +126,15 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
             subMateri: res.subMateri || '',
             tujuanPembelajaran: res.tp,
             indexOrder: lastOrder,
-            school: user.school // ISOLASI
+            school: user.school
           });
         }
+        setMessage({ text: 'Analisis AI Berhasil!', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Gagal analisis AI.");
+      setMessage({ text: 'Gagal analisis AI. Periksa koneksi atau kuota API.', type: 'error' });
     } finally {
       setIsAnalyzing(false);
     }
@@ -162,6 +168,17 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {message && (
+        <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${
+          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+          message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' : 
+          'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
+          <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4">
@@ -186,7 +203,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
               {['1','2','3','4','5','6'].map(k => <option key={k} value={k}>Kelas {k}</option>)}
             </select>
           </div>
-          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{(user.role === 'admin' ? MATA_PELAJARAN : user.mapelDiampu).map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{(user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || [])).map(m => <option key={m} value={m}>{m}</option>)}</select></div>
         </div>
       </div>
 

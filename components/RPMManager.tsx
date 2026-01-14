@@ -369,10 +369,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
         alokasiWaktu: promes?.alokasiWaktu || atp.alokasiWaktu, asesmenAwal: atp.asesmenAwal, dimensiProfil: selectedDimensi
       });
       setMessage({ text: 'Sync Berhasil!', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (e) { console.error(e); }
   };
 
   const handleGenerateAI = async (id: string) => {
+    // Fix: Using process.env.API_KEY directly from service, no need to check user.apiKey
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) { setMessage({ text: 'Pilih TP dulu!', type: 'warning' }); return; }
     setIsLoadingAI(true);
@@ -383,12 +385,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
         rpm.kelas, 
         rpm.praktikPedagogis || "Aktif", 
         rpm.alokasiWaktu, 
-        rpm.jumlahPertemuan || 1,
-        user.apiKey
+        rpm.jumlahPertemuan || 1
       );
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { ...result }); 
         setMessage({ text: 'Rancangan RPM Terurai Selesai!', type: 'success' }); 
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch (err: any) { 
       setMessage({ text: 'AI Gagal: ' + (err.message || 'Cek kuota API'), type: 'error' }); 
@@ -397,14 +399,16 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
   };
 
   const handleGenerateAsesmenAI = async (id: string) => {
+    // Fix: Using process.env.API_KEY directly from service
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) { setMessage({ text: 'Isi TP dulu!', type: 'warning' }); return; }
     setIsLoadingAsesmenAI(true);
     try {
-      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, user.apiKey);
+      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas);
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { asesmenTeknik: result }); 
         setMessage({ text: 'Instrumen & Rubrik Berhasil Disusun!', type: 'success' }); 
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch (err: any) { 
       setMessage({ text: 'Gagal: ' + err.message, type: 'error' }); 
@@ -414,20 +418,25 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
   };
 
   const handleRecommendPedagogy = async (id: string) => {
+    // Fix: Using process.env.API_KEY directly from service
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.atpId) return;
     const atp = atpData.find(a => a.id === rpm.atpId);
     if (!atp) return;
     setIsLoadingPedagogyAI(true);
     try {
-      const result = await recommendPedagogy(rpm.tujuanPembelajaran, atp.alurTujuanPembelajaran, rpm.materi, rpm.kelas, user.apiKey);
-      if (result) { await updateDoc(doc(db, "rpm", id), { praktikPedagogis: result.modelName }); setMessage({ text: `AI: ${result.modelName}.`, type: 'info' }); }
+      const result = await recommendPedagogy(rpm.tujuanPembelajaran, atp.alurTujuanPembelajaran, rpm.materi, rpm.kelas);
+      if (result) { 
+        await updateDoc(doc(db, "rpm", id), { praktikPedagogis: result.modelName }); 
+        setMessage({ text: `AI: ${result.modelName}.`, type: 'info' }); 
+        setTimeout(() => setMessage(null), 3000);
+      }
     } catch (err) { setMessage({ text: 'Gagal', type: 'error' }); } finally { setIsLoadingPedagogyAI(false); }
   };
 
   const executeDelete = async () => {
     if (!deleteConfirmId) return;
-    try { await deleteDoc(doc(db, "rpm", deleteConfirmId)); setDeleteConfirmId(null); setMessage({ text: 'Dihapus!', type: 'success' }); } catch (e) { setMessage({ text: 'Gagal!', type: 'error' }); }
+    try { await deleteDoc(doc(db, "rpm", deleteConfirmId)); setDeleteConfirmId(null); setMessage({ text: 'Dihapus!', type: 'success' }); setTimeout(() => setMessage(null), 3000); } catch (e) { setMessage({ text: 'Gagal!', type: 'error' }); }
   };
 
   const getRPMDate = (rpm: RPMItem) => {
@@ -567,7 +576,11 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500 relative theme-dpl">
-      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}><CheckCircle2 size={20}/><span className="text-sm font-black uppercase tracking-tight">{message.text}</span></div>)}
+      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${
+        message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+        message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+        'bg-red-50 border-red-200 text-red-800'
+      }`}><CheckCircle2 size={20}/><span className="text-sm font-black uppercase tracking-tight">{message.text}</span></div>)}
       {deleteConfirmId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95"><div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus RPM</h3><p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris RPM ini?</p></div><div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-lg">HAPUS</button></div></div></div>)}
 
       {isEditing && (

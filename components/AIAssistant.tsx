@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Sparkles as SparklesIcon, X as XIcon, Send as SendIcon, 
@@ -43,6 +42,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
 
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
+
     const userMessage = input;
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
@@ -50,10 +50,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
 
     try {
       if (!chatInstance.current) {
-        // Mengirimkan apiKey user ke layanan AI
         chatInstance.current = await startAIChat(
-          `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`,
-          user.apiKey
+          `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`
         );
       }
       const result = await chatInstance.current.sendMessageStream({ message: userMessage });
@@ -84,7 +82,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
           <div className="p-2 bg-indigo-500 rounded-xl"><SparklesIcon size={18} /></div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest leading-none">Asisten AI</h3>
-            {user.apiKey && <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">Private API Key Active</p>}
+            <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">System-wide AI Enabled</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -98,7 +96,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 no-scrollbar">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`p-4 rounded-2xl text-[11px] max-w-[90%] shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'}`}>
+                <div className={`p-4 rounded-2xl text-[11px] max-w-[90%] shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : (m.isError ? 'bg-rose-50 text-rose-700 border border-rose-200 rounded-tl-none' : 'bg-white text-slate-800 rounded-tl-none border border-slate-100')}`}>
                    {m.text || '...'}
                 </div>
               </div>

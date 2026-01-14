@@ -117,7 +117,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
       await addDoc(collection(db, "kisikisi"), {
         fase, kelas, semester, mataPelajaran: mapel, namaAsesmen: nameToUse,
         elemen: '', cp: '', kompetensi: 'Pengetahuan dan Pemahaman', tpId: '', tujuanPembelajaran: '',
-        indikatorSoal: '', jenis: 'Tes', bentukSoal: 'Pilihan Ganda', stimulus: '', soal: '', kunciJawaban: '', nomorSoal: nextNo,
+        indikatorSoal: '', jenis: 'Tes', bentukSoal: 'Pilihan Ganda', subBentukSoal: 'Multiple Answer', stimulus: '', soal: '', kunciJawaban: '', nomorSoal: nextNo,
         school: user.school
       });
       if (customName) setNamaAsesmen(nameToUse);
@@ -199,6 +199,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         if (base64) {
            await updateDoc(doc(db, "kisikisi", item.id), { stimulusImage: base64 });
            setMessage({ text: "Gambar AI berhasil disimpan!", type: "success" });
+           setTimeout(() => setMessage(null), 3000);
         } else {
            throw new Error("AI tidak mengembalikan gambar.");
         }
@@ -210,14 +211,14 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
      }
   };
 
-  const renderSoalContent = (content: string, bentukSoal: string = 'Pilihan Ganda', isPrint = false, isStimulus = false) => {
+  const renderSoalContent = (content: string, item: KisiKisiItem, isPrint = false, isStimulus = false) => {
     if (!content) return null;
     let preprocessedContent = content
       .replace(/\s+([B-E][\.\)])/g, '\n$1')
       .replace(/([?\.])\s+(A[\.\)])/g, '$1\n$2')
       .replace(/\[\s?\]/g, 'CHECKBOX_PLACEHOLDER');
 
-    if (bentukSoal === 'Isian' && !isStimulus && !preprocessedContent.includes('....')) {
+    if (item.bentukSoal === 'Isian' && !isStimulus && !preprocessedContent.includes('....')) {
        preprocessedContent = preprocessedContent.trim().replace(/\.*$/, '') + ' ....................................';
     }
 
@@ -228,32 +229,39 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
     const flushParagraph = (key: string) => {
       if (currentParagraphLines.length > 0) {
+        const isMultipleAnswer = item.bentukSoal === 'Pilihan Ganda Kompleks' && item.subBentukSoal === 'Multiple Answer';
+        
         renderedParts.push(
-          <div key={key} className={`whitespace-pre-wrap text-justify leading-relaxed ${bentukSoal === 'Isian' ? (isPrint ? 'mb-8' : 'mb-6') : 'mb-3'}`}>
+          <div key={key} className={`whitespace-pre-wrap text-justify leading-relaxed ${item.bentukSoal === 'Isian' ? (isPrint ? 'mb-8' : 'mb-6') : 'mb-4'}`}>
             {currentParagraphLines.map((line, li) => {
               const trimmedLine = line.trim();
+              if (!trimmedLine) return null;
+
               const hasCheckbox = line.includes('CHECKBOX_PLACEHOLDER') || line.startsWith('[]');
               const optionMatch = trimmedLine.match(/^([A-E])[\.\)]\s+(.*)/);
 
-              if (optionMatch && bentukSoal === 'Pilihan Ganda') {
+              if (optionMatch && item.bentukSoal === 'Pilihan Ganda') {
                 const [_, label, text] = optionMatch;
                 return (
-                  <div key={li} className="flex items-start gap-2 mb-2 pl-2">
+                  <div key={li} className="flex items-start gap-3 mb-2 pl-2">
                     <span className={`font-black w-7 shrink-0 text-left ${isPrint ? 'text-[11px]' : 'text-[13px]'}`}>{label}.</span>
                     <span className={`flex-1 ${isPrint ? 'text-[11px]' : 'text-[13px]'}`}>{text}</span>
                   </div>
                 );
               }
-              if (hasCheckbox) {
+
+              if (isMultipleAnswer && (hasCheckbox || trimmedLine.length > 0)) {
                 return (
-                  <div key={li} className="flex items-start gap-4 mb-4 pl-1">
-                    <div className={`shrink-0 border-2 border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-6 h-6'} bg-white flex items-center justify-center`}></div>
-                    <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-tight font-black flex-1 pt-0.5`}>
+                  <div key={li} className="flex items-start gap-4 mb-4 pl-1 group/opt">
+                    <div className={`shrink-0 border-[1.5px] border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-5 h-5'} bg-white flex items-center justify-center shadow-sm`}>
+                    </div>
+                    <span className={`${isPrint ? 'text-[11px]' : 'text-[13px]'} leading-tight font-bold flex-1 pt-0.5`}>
                        {line.replace(/CHECKBOX_PLACEHOLDER|\[\]/g, '').trim()}
                     </span>
                   </div>
                 );
               }
+
               return (
                 <div key={li} className="flex items-start gap-2 mb-1.5">
                   <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-relaxed`}>{line}</span>
@@ -268,22 +276,79 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
     const flushTable = (key: string) => {
       if (currentTableRows.length > 0) {
-        let rows = currentTableRows.map(r => r.map(c => c.trim()));
+        let rows = currentTableRows.map(r => r.filter(c => c !== undefined).map(c => c.trim()));
         rows = rows.filter(r => r.join('').length > 0);
         if (rows.length === 0) { currentTableRows = []; return; }
+        
         const header = rows[0];
-        const isMatching = header.length === 3 && bentukSoal === 'Menjodohkan';
+        const isMatching = header.length === 3 && item.bentukSoal === 'Menjodohkan';
+        const isGrid = item.bentukSoal === 'Pilihan Ganda Kompleks' && item.subBentukSoal === 'Grid';
         
         renderedParts.push(
-          <div key={key} className="my-4 overflow-hidden rounded-xl border-2 border-black">
-            <table className={`border-collapse w-full ${isMatching ? 'table-fixed' : 'table-auto'} ${isPrint ? 'text-[10px]' : 'text-[12px]'}`}>
-              <thead><tr className="bg-slate-100">{header.map((cell, i) => (<th key={i} className="border-2 border-black p-2 font-black text-center uppercase tracking-tight">{cell}</th>))}</tr></thead>
+          <div key={key} className={`my-6 overflow-x-auto ${isMatching ? '' : 'rounded-[1rem] border-2 border-black shadow-sm'}`}>
+            <table className={`border-collapse w-full ${isPrint ? 'text-[10px]' : 'text-[12px]'} table-fixed`}>
+              <colgroup>
+                {isGrid && header.length >= 2 ? (
+                  <>
+                    <col style={{ width: '70%' }} />
+                    {header.slice(1).map((_, i) => (
+                      <col key={i} style={{ width: isPrint ? '15%' : '15%' }} />
+                    ))}
+                  </>
+                ) : isMatching ? (
+                  <>
+                    <col style={{ width: '45%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '45%' }} />
+                  </>
+                ) : null}
+              </colgroup>
+              {!isMatching && (
+                <thead>
+                  <tr className="bg-slate-100">
+                    {header.map((cell, i) => (
+                      <th key={i} className="border-2 border-black p-3 font-black text-center uppercase tracking-tight text-[11px] whitespace-normal leading-tight">
+                        {cell}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
               <tbody>
-                {rows.slice(1).map((row, ri) => (
-                  <tr key={ri}>{row.map((cell, ci) => {
+                {rows.slice(isMatching ? 0 : 1).map((row, ri) => (
+                  <tr key={ri} className={`${isMatching ? 'border-none' : 'hover:bg-slate-50/50 transition-colors'}`}>
+                    {row.map((cell, ci) => {
                       const isMiddleCol = isMatching && ci === 1;
-                      return (<td key={ci} className={`border-2 border-black p-3 ${isMiddleCol ? 'text-center' : 'text-justify'} align-middle`}>{isMiddleCol ? (<div className="flex justify-between items-center px-1"><div className="w-2 h-2 bg-black rounded-full"></div><div className="flex-1 border-t-2 border-dotted border-slate-500 mx-1"></div><div className="w-2 h-2 bg-black rounded-full"></div></div>) : cell}</td>);
-                    })}</tr>
+                      const isGridCell = isGrid && ci > 0;
+                      
+                      if (isMatching) {
+                        if (ci === 1) return <td key={ci} className="border-none"></td>;
+                        const side = ci === 0 ? 'left' : 'right';
+                        return (
+                          <td key={ci} className="border-none py-3 relative px-1">
+                             <div className={`relative border-[1.5px] border-rose-600 rounded-xl px-4 py-3 font-bold text-slate-800 text-center shadow-sm min-h-[4rem] flex items-center justify-center bg-white`}>
+                                {cell}
+                                <div className={`absolute top-1/2 ${side === 'left' ? '-right-1.5' : '-left-1.5'} -translate-y-1/2 w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-sm flex items-center justify-center`}>
+                                   <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                </div>
+                             </div>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td key={ci} className={`border-2 border-black p-3 ${isMiddleCol ? 'text-center' : (isGridCell ? 'text-center' : 'text-justify')} align-middle whitespace-normal leading-relaxed`}>
+                          {isGridCell ? (
+                             <div className="flex justify-center items-center py-1">
+                               <div className={`${isPrint ? 'w-4 h-4' : 'w-5 h-5'} border-[1.5px] border-black rounded-sm bg-white shadow-sm flex-shrink-0`}></div>
+                             </div>
+                          ) : (
+                            <div className="min-h-[1.5em]">{cell}</div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -304,7 +369,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
       }
     });
     flushParagraph('p-final'); flushTable('t-final');
-    return <div>{renderedParts}</div>;
+    return <div className="soal-content-container" style={{ width: '100%', lineHeight: '1.6' }}>{renderedParts}</div>;
   };
 
   const handleExportWord = () => {
@@ -361,15 +426,18 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
             <title>${settings.schoolName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
-              body { font-family: 'Arial', sans-serif; background: white; padding: 20px; color: black; }
+              body { font-family: 'Arial', sans-serif; background: white; padding: 20px; color: black; line-height: 1.6; }
               @media print { 
                 .no-print { display: none !important; } 
                 body { padding: 0; }
                 ${isKisiKisi ? '@page { size: landscape; margin: 1cm; }' : ''}
               }
               .break-inside-avoid { page-break-inside: avoid; }
-              table { border-collapse: collapse; width: 100%; border: 1.5px solid black; }
-              th, td { border: 1px solid black; padding: 5px; }
+              table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; table-layout: fixed !important; }
+              th, td { border: 1.5px solid black; padding: 6px; overflow-wrap: break-word; }
+              .soal-content-container { width: 100%; }
+              td div { line-height: 1.5; }
+              .Menjodohkan-box { border: 2px solid #e11d48; border-radius: 0.75rem; padding: 0.75rem; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body>
@@ -382,7 +450,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   if (isPrintMode) {
     const isKisiKisi = activeTab === 'KISI_KISI';
     return (
-      <div className="bg-white min-h-screen text-slate-900 p-8 font-sans">
+      <div className="bg-white min-h-screen text-slate-900 p-8 font-sans print:p-0">
         <div className="no-print mb-8 flex justify-between bg-slate-100 p-4 rounded-[2rem] border border-slate-200 shadow-xl sticky top-4 z-[100]">
            <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-8 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all"><ArrowLeft size={16}/> KEMBALI</button>
            <div className="flex gap-2">
@@ -446,15 +514,15 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                          {item.kompetensi === 'Pengetahuan dan Pemahaman' ? 'L1' : item.kompetensi === 'Aplikasi' ? 'L2' : 'L3'}
                       </td>
                       <td className="p-3 border border-black text-justify leading-tight">{item.indikatorSoal}</td>
-                      <td className="p-3 border border-black text-center uppercase text-[8pt] font-bold">{item.bentukSoal}</td>
+                      <td className="p-3 border border-black text-center uppercase text-[8pt] font-bold">{item.bentukSoal} {item.bentukSoal === 'Pilihan Ganda Kompleks' ? `(${item.subBentukSoal})` : ''}</td>
                       <td className="p-3 border border-black">
                          {item.stimulus && (
                             <div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic">
-                               {renderSoalContent(item.stimulus, item.bentukSoal, true, true)}
+                               {renderSoalContent(item.stimulus, item, true, true)}
                             </div>
                          )}
                          <div className="leading-relaxed">
-                            {renderSoalContent(item.soal, item.bentukSoal, true, false)}
+                            {renderSoalContent(item.soal, item, true, false)}
                          </div>
                       </td>
                       <td className="p-3 border border-black text-center font-black">{item.kunciJawaban}</td>
@@ -470,10 +538,10 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                   <div key={item.id} className="break-inside-avoid">
                     <div className="flex gap-4 items-start">
                       <span className="font-black text-lg min-w-[2rem]">{item.nomorSoal}.</span>
-                      <div className="flex-1 space-y-4">
-                         {item.stimulusImage && (<div className="flex justify-center my-4"><img src={item.stimulusImage} className="max-w-[300px] border-2 border-black p-1" /></div>)}
-                         {item.stimulus && (<div className="p-4 bg-slate-50 border-2 border-black text-sm italic">{renderSoalContent(item.stimulus, item.bentukSoal, true, true)}</div>)}
-                         <div className="text-base leading-relaxed">{renderSoalContent(item.soal, item.bentukSoal, true, false)}</div>
+                      <div className="flex-1 space-y-5">
+                         {item.stimulusImage && (<div className="flex justify-center my-6"><img src={item.stimulusImage} className="max-w-[300px] border-4 border-white shadow-xl rounded-xl p-1" /></div>)}
+                         {item.stimulus && (<div className="p-6 bg-slate-50 border-2 border-black rounded-[1.5rem] text-[10.5pt] italic leading-relaxed text-justify shadow-inner">{renderSoalContent(item.stimulus, item, true, true)}</div>)}
+                         <div className="text-[11pt] leading-relaxed text-slate-900">{renderSoalContent(item.soal, item, true, false)}</div>
                       </div>
                     </div>
                   </div>
@@ -492,7 +560,11 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
-      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}><CheckCircle2 size={20}/><span>{message.text}</span></div>)}
+      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all ${
+        message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+        message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+        'bg-red-50 border-red-200 text-red-800'
+      }`}><CheckCircle2 size={20}/><span>{message.text}</span></div>)}
       
       {showAddAsesmenModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
@@ -537,7 +609,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                   <th className="px-6 py-2 w-16 text-center border-r border-white/5">Idx</th>
                   <th className="px-6 py-2 w-48">Elemen & TP</th>
                   <th className="px-6 py-2 w-40 text-center">Level Kognitif</th>
-                  <th className="px-6 py-2 w-40 text-center">Bentuk</th>
+                  <th className="px-6 py-2 w-48 text-center">Bentuk Soal</th>
                   <th className="px-6 py-2 w-72">Indikator Soal (AI)</th>
                   <th className="px-6 py-2 w-[700px]">Konten Soal (Teks, Pertanyaan, Kunci)</th>
                   <th className="px-6 py-2 w-24 text-center border-l border-white/5">No Soal</th>
@@ -553,7 +625,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                         <option value="">Pilih TP</option>
                         {tps.filter(t => t.kelas === kelas && t.mataPelajaran === mapel).map(t => <option key={t.id} value={t.id}>{t.tujuanPembelajaran}</option>)}
                       </select>
-                      <div className="text-[9px] text-slate-500 italic leading-tight">{item.tujuanPembelajaran}</div>
+                      <div className="text-[9px] text-slate-505 italic leading-tight">{item.tujuanPembelajaran}</div>
                     </td>
                     <td className="px-6 py-4">
                       <select className="w-full bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-[10px] font-black text-indigo-700 outline-none" value={item.kompetensi} onChange={e => updateKisiKisi(item.id, 'kompetensi', e.target.value as any)}>
@@ -562,7 +634,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                         <option value="Penalaran">Penalaran</option>
                       </select>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 space-y-2">
                       <select className="w-full text-[10px] font-bold p-1.5 border rounded-xl bg-slate-50 outline-none" value={item.bentukSoal} onChange={e => updateKisiKisi(item.id, 'bentukSoal', e.target.value as any)}>
                         <option>Pilihan Ganda</option>
                         <option>Pilihan Ganda Kompleks</option>
@@ -570,6 +642,15 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                         <option>Isian</option>
                         <option>Uraian</option>
                       </select>
+                      {item.bentukSoal === 'Pilihan Ganda Kompleks' && (
+                        <div className="p-2 bg-rose-50 rounded-lg border border-rose-100 space-y-1">
+                          <label className="text-[8px] font-black uppercase text-rose-600 block leading-tight">Tipe Kompleks:</label>
+                          <select className="w-full text-[9px] font-black p-1 rounded-md border-rose-200 outline-none bg-white" value={item.subBentukSoal || 'Multiple Answer'} onChange={e => updateKisiKisi(item.id, 'subBentukSoal', e.target.value)}>
+                             <option value="Multiple Answer">Multiple Choice Multiple Answer</option>
+                             <option value="Grid">Asosiasi/Grid (B-S)</option>
+                          </select>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 relative group">
                       <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-bold italic leading-relaxed min-h-[100px]" value={item.indikatorSoal} onChange={e => updateKisiKisi(item.id, 'indikatorSoal', e.target.value)} />
@@ -590,11 +671,11 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                                 <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-medium italic leading-relaxed min-h-[160px]" value={item.stimulus} placeholder="Tuliskan teks bacaan atau buat tabel di sini..." onChange={e => updateKisiKisi(item.id, 'stimulus', e.target.value)} />
                                 {item.stimulusImage && <img src={item.stimulusImage} className="w-20 h-20 object-cover mt-2 rounded-lg border border-white shadow-md absolute bottom-2 right-2" alt="Preview"/>}
                              </div>
-                             <div className="mt-2 overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner">{renderSoalContent(item.stimulus, item.bentukSoal, false, true)}</div>
+                             <div className="mt-2 overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner">{renderSoalContent(item.stimulus, item)}</div>
                           </div>
                           <div className="space-y-3 flex flex-col">
                              <div><span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pertanyaan & Opsi:</span><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] font-bold min-h-[120px]" value={item.soal} onChange={e => updateKisiKisi(item.id, 'soal', e.target.value)} placeholder="Tulis butir soal..." /></div>
-                             <div className="overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner mb-2">{renderSoalContent(item.soal, item.bentukSoal, false, false)}</div>
+                             <div className="overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner mb-2">{renderSoalContent(item.soal, item)}</div>
                              <div className="flex items-center gap-2 mt-auto"><span className="text-[9px] font-black uppercase text-slate-400">Kunci:</span><input className="flex-1 bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-black text-indigo-600" value={item.kunciJawaban} onChange={e => updateKisiKisi(item.id, 'kunciJawaban', e.target.value)} placeholder="Jawaban benar..." /></div>
                           </div>
                        </div>
@@ -606,7 +687,6 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                     <td className="px-6 py-4 text-center"><button onClick={() => deleteDoc(doc(db, "kisikisi", item.id))} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button></td>
                   </tr>
                 ))}
-                {/* TOMBOL TAMBAH BARIS DI BAWAH TABEL */}
                 <tr>
                   <td colSpan={8} className="p-6">
                     <button 
@@ -642,18 +722,18 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                                     {(item.stimulus || item.stimulusImage) && (
                                       <div>
                                          <p className="font-bold text-[11px] italic text-slate-600 mb-2">Cermatilah teks atau gambar berikut untuk menjawab soal nomor {item.nomorSoal}:</p>
-                                         <div className="p-6 bg-slate-50 rounded-[2rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden mb-6">
+                                         <div className="p-8 bg-slate-50 rounded-[2rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden mb-6">
                                             <div className="absolute top-0 right-0 p-4 opacity-5 text-indigo-600"><BookText size={64}/></div>
                                             {item.stimulusImage && (
-                                               <div className="flex justify-center mb-6">
-                                                  <img src={item.stimulusImage} className="max-w-[350px] rounded-xl border-4 border-white shadow-xl" alt="Stimulus" />
+                                               <div className="flex justify-center mb-8">
+                                                  <img src={item.stimulusImage} className="max-w-[400px] rounded-2xl border-4 border-white shadow-2xl" alt="Stimulus" />
                                                </div>
                                             )}
-                                            <div className="text-sm leading-relaxed text-slate-700 italic">{renderSoalContent(item.stimulus, item.bentukSoal, false, true)}</div>
+                                            <div className="text-[10.5pt] leading-relaxed text-slate-800 italic">{renderSoalContent(item.stimulus, item, true, true)}</div>
                                          </div>
                                       </div>
                                     )}
-                                    <div className="text-slate-800 text-sm leading-relaxed pr-10">{renderSoalContent(item.soal, item.bentukSoal, false, false)}</div>
+                                    <div className="text-slate-900 text-[11pt] leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div>
                                  </div>
                               </td>
                            </tr>

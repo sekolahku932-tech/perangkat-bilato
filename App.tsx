@@ -5,7 +5,8 @@ import {
   User as UserIcon, Settings, Users, CalendarDays, FileText, 
   CalendarRange, Rocket, Menu, ChevronRight, Loader2, AlertTriangle,
   BarChart3, LayoutDashboard, Code, BookText, PenTool, ClipboardCheck,
-  ClipboardList, ArrowLeft, UserCircle, X, Save, Eye, EyeOff, Sparkles
+  ClipboardList, ArrowLeft, UserCircle, X, Save, Eye, EyeOff, Sparkles,
+  FileCheck
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import CPManager from './components/CPManager';
@@ -17,10 +18,10 @@ import HariEfektifManager from './components/HariEfektifManager';
 import ProtaManager from './components/ProtaManager';
 import PromesManager from './components/PromesManager';
 import RPMManager from './components/RPMManager';
-import AsesmenManager from './components/AsesmenManager';
 import JurnalManager from './components/JurnalManager';
 import LKPDManager from './components/LKPDManager';
 import EvaluasiManager from './components/EvaluasiManager';
+import AsesmenManager from './components/AsesmenManager';
 import AIAssistant from './components/AIAssistant';
 import LoginPage from './components/LoginPage';
 import SchoolSelectionPage from './components/SchoolSelectionPage';
@@ -31,7 +32,7 @@ const App: React.FC = () => {
   const [selectedSchool, setSelectedSchool] = useState<string | null>(localStorage.getItem('selected_school'));
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState<'DASHBOARD' | 'CP' | 'ANALISIS' | 'ATP' | 'SETTING' | 'USER' | 'EFEKTIF' | 'PROTA' | 'PROMES' | 'RPM' | 'LKPD' | 'ASESMEN_SUMATIF' | 'EVALUASI' | 'JURNAL'>('DASHBOARD');
+  const [activeMenu, setActiveMenu] = useState<'DASHBOARD' | 'CP' | 'ANALISIS' | 'ATP' | 'SETTING' | 'USER' | 'EFEKTIF' | 'PROTA' | 'PROMES' | 'RPM' | 'LKPD' | 'ASESMEN' | 'EVALUASI' | 'JURNAL'>('DASHBOARD');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -70,7 +71,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [selectedSchool]);
 
-  // Fix: Added missing handleLogout function as requested (line 150)
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -91,7 +91,7 @@ const App: React.FC = () => {
     { id: 'RPM', label: 'RPM (Deep Learning)', icon: <Rocket size={20} />, color: 'text-cyan-600', bg: 'bg-cyan-50' },
     { id: 'LKPD', label: 'Lembar Kerja (LKPD)', icon: <PenTool size={20} />, color: 'text-blue-600', bg: 'bg-blue-50' },
     { id: 'JURNAL', label: 'Jurnal Harian', icon: <BookText size={20} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { id: 'ASESMEN_SUMATIF', label: 'Asesmen Sumatif', icon: <BarChart3 size={20} />, color: 'text-rose-600', bg: 'bg-rose-50' },
+    { id: 'ASESMEN', label: 'Asesmen Sumatif', icon: <FileCheck size={20} />, color: 'text-rose-600', bg: 'bg-rose-50' },
     { id: 'EVALUASI', label: 'Evaluasi & Nilai', icon: <ClipboardCheck size={20} />, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { id: 'USER', label: 'Manajemen User', icon: <Users size={20} />, color: 'text-slate-600', bg: 'bg-slate-100', adminOnly: true },
     { id: 'SETTING', label: 'Pengaturan Sekolah', icon: <Settings size={20} />, color: 'text-slate-700', bg: 'bg-slate-200', adminOnly: true },
@@ -160,7 +160,6 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-black text-slate-900 truncate uppercase">{user.name}</p>
                 <div className="flex items-center gap-1">
                   <p className="text-[8px] text-indigo-600 font-black uppercase tracking-tighter">{user.role}</p>
-                  {/* Removed API Key pulsed indicator per strictly mandated coding guidelines */}
                 </div>
               </div>
             </div>
@@ -200,7 +199,7 @@ const App: React.FC = () => {
             {activeMenu === 'RPM' && <RPMManager user={user} />}
             {activeMenu === 'LKPD' && <LKPDManager user={user} />}
             {activeMenu === 'JURNAL' && <JurnalManager user={user} />}
-            {activeMenu === 'ASESMEN_SUMATIF' && <AsesmenManager type="sumatif" user={user} />}
+            {activeMenu === 'ASESMEN' && <AsesmenManager user={user} type="sumatif" />}
             {activeMenu === 'EVALUASI' && <EvaluasiManager user={user} />}
           </div>
         </main>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle } from 'lucide-react';
@@ -16,7 +15,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
   const [isPrintMode, setIsPrintMode] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   
   const [filterFase, setFilterFase] = useState<Fase>(Fase.A);
   const [filterKelas, setFilterKelas] = useState<Kelas>('1');
@@ -60,7 +59,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    // ISOLASI: Dokumen settings sekolah
     const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
@@ -70,7 +68,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    // ISOLASI: Filter semua koleksi berdasarkan sekolah
     const qAtp = query(collection(db, "atp"), where("school", "==", user.school));
     const unsubATP = onSnapshot(qAtp, (snap) => {
       setAtpData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
@@ -138,12 +135,13 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             asesmenAkhir: '',
             sumberBelajar: '',
             indexOrder: a.indexOrder || 0,
-            school: user.school // ISOLASI
+            school: user.school
           });
           count++;
         }
       }
       setMessage({ text: `Berhasil sinkronisasi ${count} TP.`, type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       setMessage({ text: 'Gagal.', type: 'error' });
     } finally {
@@ -156,8 +154,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
     if (!item || !item.tujuanPembelajaran) return;
     setIsProcessingId(id);
     try {
-      // Menggunakan apiKey user jika ada
-      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas, user.apiKey);
+      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas);
       if (suggestions) {
         await updateDoc(doc(db, "atp", id), {
           alurTujuanPembelajaran: suggestions.alurTujuan,
@@ -169,9 +166,10 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
           sumberBelajar: suggestions.sumberBelajar
         });
         setMessage({ text: 'Detail ATP dilengkapi AI.', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch (err) {
-      setMessage({ text: 'Gagal AI.', type: 'error' });
+      setMessage({ text: 'Gagal AI. Periksa koneksi atau kuota API.', type: 'error' });
     } finally { setIsProcessingId(null); }
   };
 
@@ -214,13 +212,15 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   };
 
   const isClassLocked = user.role === 'guru' && user.teacherType === 'kelas';
-  const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : user.mapelDiampu;
+  const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || []);
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
       {message && (
         <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all animate-in slide-in-from-right ${
-          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'
+          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+          message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+          'bg-red-50 border-red-100 text-red-800'
         }`}>
           {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
           <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>
@@ -229,7 +229,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95">
             <div className="p-8 text-center">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
               <h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus ATP</h3>

@@ -13,6 +13,26 @@ interface AsesmenManagerProps {
   user: User;
 }
 
+// Fungsi pembantu untuk mengacak array dengan seed yang stabil
+const seededShuffle = <T,>(array: T[], seed: string): T[] => {
+  const arr = [...array];
+  let seedNum = 0;
+  for (let i = 0; i < seed.length; i++) {
+    seedNum += seed.charCodeAt(i);
+  }
+  
+  const random = () => {
+    const x = Math.sin(seedNum++) * 10000;
+    return x - Math.floor(x);
+  };
+
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
 const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   const [activeTab, setActiveTab] = useState<'KISI_KISI' | 'SOAL'>('KISI_KISI');
   const [fase, setFase] = useState<Fase>(Fase.A);
@@ -39,7 +59,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
   const [settings, setSettings] = useState<SchoolSettings>({
     schoolName: user.school,
-    address: 'Jl. Trans Sulawesi Desa Bumlea Kecamatan Bilato, Kabupaten Gorontalo',
+    address: 'Jl. Trans Sulawesi, Kec. Bilato',
     principalName: 'Nama Kepala Sekolah',
     principalNip: '-'
   });
@@ -159,7 +179,8 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
           await updateKisiKisi(item.id, 'indikatorSoal', indikator);
       }
     } catch (e: any) {
-      setMessage({ text: "Gagal: " + (e.message || "Cek kuota API"), type: "error" });
+      console.error("AI Indikator Error:", e);
+      setMessage({ text: "Gagal: Sinyal AI terputus.", type: "error" });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`ind-${item.id}`]: false })); 
     }
@@ -179,9 +200,15 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
           soal: result.soal || "", 
           kunciJawaban: result.kunci || "" 
         });
+        setMessage({ text: "Soal berhasil disusun!", type: "success" });
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch (e: any) {
-      setMessage({ text: "Gagal: " + (e.message || "Cek kuota API"), type: "error" });
+      console.error("AI Soal Error:", e);
+      setMessage({ 
+        text: "Gagal menyusun soal: Respon AI tidak lengkap atau terputus. Silakan coba kembali.", 
+        type: "error" 
+      });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`soal-${item.id}`]: false })); 
     }
@@ -205,7 +232,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         }
      } catch (e: any) {
         console.error(e);
-        setMessage({ text: "Gagal membuat gambar: " + e.message, type: "error" });
+        setMessage({ text: "Gagal membuat gambar: Gangguan server AI.", type: "error" });
      } finally {
         setAiLoadingMap(prev => ({ ...prev, [`img-${item.id}`]: false }));
      }
@@ -213,16 +240,18 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
   const renderSoalContent = (content: string, item: KisiKisiItem, isPrint = false, isStimulus = false) => {
     if (!content) return null;
-    let preprocessedContent = content
-      .replace(/\s+([B-E][\.\)])/g, '\n$1')
-      .replace(/([?\.])\s+(A[\.\)])/g, '$1\n$2')
-      .replace(/\[\s?\]/g, 'CHECKBOX_PLACEHOLDER');
+    
+    // Tahap Pre-Processing Cerdas:
+    let preprocessed = content
+      .replace(/([A-D][\.\)])\s/g, '\n$1 ') 
+      .replace(/(\S)\s*\[\s*\]/g, '$1\n[]') 
+      .replace(/\[\s?\]/g, 'CHECKBOX_MARKER');
 
-    if (item.bentukSoal === 'Isian' && !isStimulus && !preprocessedContent.includes('....')) {
-       preprocessedContent = preprocessedContent.trim().replace(/\.*$/, '') + ' ....................................';
+    if (item.bentukSoal === 'Isian' && !isStimulus && !preprocessed.includes('....')) {
+       preprocessed = preprocessed.trim().replace(/\.*$/, '') + ' ....................................';
     }
 
-    const lines = preprocessedContent.split('\n');
+    const lines = preprocessed.split('\n');
     const renderedParts: React.ReactNode[] = [];
     let currentTableRows: string[][] = [];
     let currentParagraphLines: string[] = [];
@@ -237,34 +266,43 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
               const trimmedLine = line.trim();
               if (!trimmedLine) return null;
 
-              const hasCheckbox = line.includes('CHECKBOX_PLACEHOLDER') || line.startsWith('[]');
+              const hasMarker = line.includes('CHECKBOX_MARKER') || trimmedLine.startsWith('[]');
+              const instructionKeywords = /^(Berdasarkan|Manakah|Pilihlah|Sesuai|Tentukan|Perhatikan|Instruksi|Jodohkanlah)/i;
+              const isActuallyInstruction = instructionKeywords.test(trimmedLine.replace(/CHECKBOX_MARKER|\[\]/g, '').trim());
+
+              const shouldRenderAsCheckbox = isMultipleAnswer && hasMarker && !isActuallyInstruction;
               const optionMatch = trimmedLine.match(/^([A-E])[\.\)]\s+(.*)/);
 
+              // 1. Render Pilihan Ganda (A, B, C, D)
               if (optionMatch && item.bentukSoal === 'Pilihan Ganda') {
                 const [_, label, text] = optionMatch;
                 return (
                   <div key={li} className="flex items-start gap-3 mb-2 pl-2">
                     <span className={`font-black w-7 shrink-0 text-left ${isPrint ? 'text-[11px]' : 'text-[13px]'}`}>{label}.</span>
-                    <span className={`flex-1 ${isPrint ? 'text-[11px]' : 'text-[13px]'}`}>{text}</span>
+                    <span className={`flex-1 ${isPrint ? 'text-[11px]' : 'text-[13px]'} font-black`}>{text}</span>
                   </div>
                 );
               }
 
-              if (isMultipleAnswer && (hasCheckbox || trimmedLine.length > 0)) {
+              // 2. Render Opsi Multiple Answer (Kotak Centang)
+              if (shouldRenderAsCheckbox) {
                 return (
-                  <div key={li} className="flex items-start gap-4 mb-4 pl-1 group/opt">
-                    <div className={`shrink-0 border-[1.5px] border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-5 h-5'} bg-white flex items-center justify-center shadow-sm`}>
+                  <div key={li} className="flex items-start gap-4 mb-3 pl-1">
+                    <div className={`shrink-0 border-2 border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-5 h-5'} bg-white flex items-center justify-center shadow-sm`}>
                     </div>
-                    <span className={`${isPrint ? 'text-[11px]' : 'text-[13px]'} leading-tight font-bold flex-1 pt-0.5`}>
-                       {line.replace(/CHECKBOX_PLACEHOLDER|\[\]/g, '').trim()}
+                    <span className={`${isPrint ? 'text-[11px]' : 'text-[13px]'} leading-tight font-black flex-1 pt-0.5`}>
+                       {line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}
                     </span>
                   </div>
                 );
               }
 
+              // 3. Render Teks Biasa (Pertanyaan / Narasi)
               return (
-                <div key={li} className="flex items-start gap-2 mb-1.5">
-                  <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-relaxed`}>{line}</span>
+                <div key={li} className="flex items-start gap-2 mb-2">
+                  <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-relaxed font-black`}>
+                    {line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}
+                  </span>
                 </div>
               );
             })}
@@ -277,37 +315,57 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const flushTable = (key: string) => {
       if (currentTableRows.length > 0) {
         let rows = currentTableRows.map(r => r.filter(c => c !== undefined).map(c => c.trim()));
+        
+        // Filter baris pemisah markdown (:---) agar tidak mengotori UI
+        rows = rows.filter(r => !r.some(c => c.match(/^[:\-\s]+$/)));
         rows = rows.filter(r => r.join('').length > 0);
+        
         if (rows.length === 0) { currentTableRows = []; return; }
         
-        const header = rows[0];
-        const isMatching = header.length === 3 && item.bentukSoal === 'Menjodohkan';
+        const isMatching = item.bentukSoal === 'Menjodohkan';
         const isGrid = item.bentukSoal === 'Pilihan Ganda Kompleks' && item.subBentukSoal === 'Grid';
         
+        let dataRows = rows;
+        if (isMatching) {
+            // Deteksi Header untuk dibuang pada tipe Menjodohkan
+            const firstRowJoined = rows[0].join(' ').toLowerCase();
+            if (firstRowJoined.includes('pernyataan') || firstRowJoined.includes('pilihan')) {
+                dataRows = rows.slice(1);
+            }
+            
+            // LOGIKA PENGACAKAN UNTUK MENJODOHKAN
+            const leftItems = dataRows.map(r => r[0]).filter(Boolean);
+            const rightItems = dataRows.map(r => r[2] || r[1] || '').filter(Boolean);
+            
+            // Acak kedua sisi secara independen menggunakan seeded shuffle agar tidak berubah saat re-render
+            const shuffledLeft = seededShuffle(leftItems, item.id + '-left');
+            const shuffledRight = seededShuffle(rightItems, item.id + '-right');
+            
+            const maxLength = Math.max(shuffledLeft.length, shuffledRight.length);
+            dataRows = Array.from({ length: maxLength }, (_, i) => [
+              shuffledLeft[i] || '',
+              '', // Kolom tengah kosong untuk garis
+              shuffledRight[i] || ''
+            ]);
+        }
+        
+        if (dataRows.length === 0) { currentTableRows = []; return; }
+
         renderedParts.push(
-          <div key={key} className={`my-6 overflow-x-auto ${isMatching ? '' : 'rounded-[1rem] border-2 border-black shadow-sm'}`}>
+          <div key={key} className={`my-8 overflow-x-auto ${isMatching ? '' : 'rounded-[1rem] border-2 border-black shadow-sm overflow-hidden'}`}>
             <table className={`border-collapse w-full ${isPrint ? 'text-[10px]' : 'text-[12px]'} table-fixed`}>
               <colgroup>
-                {isGrid && header.length >= 2 ? (
-                  <>
-                    <col style={{ width: '70%' }} />
-                    {header.slice(1).map((_, i) => (
-                      <col key={i} style={{ width: isPrint ? '15%' : '15%' }} />
-                    ))}
-                  </>
+                {isGrid ? (
+                  <><col style={{ width: '60%' }} /><col style={{ width: '20%' }} /><col style={{ width: '20%' }} /></>
                 ) : isMatching ? (
-                  <>
-                    <col style={{ width: '45%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '45%' }} />
-                  </>
+                  <><col style={{ width: '40%' }} /><col style={{ width: '20%' }} /><col style={{ width: '40%' }} /></>
                 ) : null}
               </colgroup>
               {!isMatching && (
                 <thead>
                   <tr className="bg-slate-100">
-                    {header.map((cell, i) => (
-                      <th key={i} className="border-2 border-black p-3 font-black text-center uppercase tracking-tight text-[11px] whitespace-normal leading-tight">
+                    {rows[0].map((cell, i) => (
+                      <th key={i} className="border-2 border-black p-3 font-black text-center uppercase tracking-tight text-[11px] whitespace-normal leading-tight overflow-hidden text-ellipsis">
                         {cell}
                       </th>
                     ))}
@@ -315,21 +373,22 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                 </thead>
               )}
               <tbody>
-                {rows.slice(isMatching ? 0 : 1).map((row, ri) => (
+                {(isMatching ? dataRows : rows.slice(1)).map((row, ri) => (
                   <tr key={ri} className={`${isMatching ? 'border-none' : 'hover:bg-slate-50/50 transition-colors'}`}>
                     {row.map((cell, ci) => {
                       const isMiddleCol = isMatching && ci === 1;
-                      const isGridCell = isGrid && ci > 0;
+                      const isGridValueCell = isGrid && ci > 0;
                       
                       if (isMatching) {
                         if (ci === 1) return <td key={ci} className="border-none"></td>;
                         const side = ci === 0 ? 'left' : 'right';
+                        if (!cell) return <td key={ci} className="border-none"></td>;
                         return (
-                          <td key={ci} className="border-none py-3 relative px-1">
-                             <div className={`relative border-[1.5px] border-rose-600 rounded-xl px-4 py-3 font-bold text-slate-800 text-center shadow-sm min-h-[4rem] flex items-center justify-center bg-white`}>
-                                {cell}
-                                <div className={`absolute top-1/2 ${side === 'left' ? '-right-1.5' : '-left-1.5'} -translate-y-1/2 w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-sm flex items-center justify-center`}>
-                                   <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                          <td key={ci} className="border-none py-2 relative px-1">
+                             <div className={`relative border-2 ${side === 'left' ? 'border-rose-600' : 'border-indigo-600'} rounded-2xl px-4 py-3 font-black text-slate-800 text-center shadow-sm min-h-[3.5rem] flex items-center justify-center bg-white`}>
+                                <div className="leading-tight">{cell}</div>
+                                <div className={`absolute top-1/2 ${side === 'left' ? '-right-2' : '-left-2'} -translate-y-1/2 w-4 h-4 ${side === 'left' ? 'bg-rose-600' : 'bg-indigo-600'} rounded-full border-2 border-white shadow flex items-center justify-center`}>
+                                   <div className="w-1 h-1 bg-white rounded-full"></div>
                                 </div>
                              </div>
                           </td>
@@ -337,13 +396,14 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                       }
 
                       return (
-                        <td key={ci} className={`border-2 border-black p-3 ${isMiddleCol ? 'text-center' : (isGridCell ? 'text-center' : 'text-justify')} align-middle whitespace-normal leading-relaxed`}>
-                          {isGridCell ? (
-                             <div className="flex justify-center items-center py-1">
-                               <div className={`${isPrint ? 'w-4 h-4' : 'w-5 h-5'} border-[1.5px] border-black rounded-sm bg-white shadow-sm flex-shrink-0`}></div>
+                        <td key={ci} className={`border-2 border-black p-3 ${isMiddleCol ? 'text-center' : (isGridValueCell ? 'text-center' : 'text-justify')} align-middle whitespace-normal leading-relaxed overflow-wrap-break-word`}>
+                          {isGridValueCell ? (
+                             <div className="flex justify-center items-center py-2">
+                               <div className={`${isPrint ? 'w-5 h-5' : 'w-6 h-6'} border-2 border-black rounded-md bg-white shadow-sm flex-shrink-0 flex items-center justify-center`}>
+                               </div>
                              </div>
                           ) : (
-                            <div className="min-h-[1.5em]">{cell}</div>
+                            <div className="min-h-[1.5em] font-black">{cell}</div>
                           )}
                         </td>
                       );
@@ -359,7 +419,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     };
 
     lines.forEach((line, index) => {
-      if (line.trim().includes('|')) {
+      if (line.trim().startsWith('|')) {
         if (currentParagraphLines.length > 0) flushParagraph(`p-${index}`);
         currentTableRows.push(line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|'));
       } else {
@@ -418,7 +478,6 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   const handlePrint = () => {
     const content = printRef.current?.innerHTML;
     const printWindow = window.open('', '_blank');
-    const isKisiKisi = activeTab === 'KISI_KISI';
     if (printWindow) {
       printWindow.document.write(`
         <html>
@@ -430,14 +489,12 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
               @media print { 
                 .no-print { display: none !important; } 
                 body { padding: 0; }
-                ${isKisiKisi ? '@page { size: landscape; margin: 1cm; }' : ''}
               }
               .break-inside-avoid { page-break-inside: avoid; }
               table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; table-layout: fixed !important; }
               th, td { border: 1.5px solid black; padding: 6px; overflow-wrap: break-word; }
               .soal-content-container { width: 100%; }
               td div { line-height: 1.5; }
-              .Menjodohkan-box { border: 2px solid #e11d48; border-radius: 0.75rem; padding: 0.75rem; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body>
@@ -451,7 +508,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const isKisiKisi = activeTab === 'KISI_KISI';
     return (
       <div className="bg-white min-h-screen text-slate-900 p-8 font-sans print:p-0">
-        <div className="no-print mb-8 flex justify-between bg-slate-100 p-4 rounded-[2rem] border border-slate-200 shadow-xl sticky top-4 z-[100]">
+        <div className="no-print mb-8 flex justify-between bg-slate-100 p-4 rounded-2xl border border-slate-200 shadow-xl sticky top-4 z-[100]">
            <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-8 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all"><ArrowLeft size={16}/> KEMBALI</button>
            <div className="flex gap-2">
              <button onClick={handleExportWord} className="bg-blue-600 text-white px-8 py-2 rounded-xl text-xs font-black shadow-lg flex items-center gap-2"><FileDown size={16}/> WORD</button>
@@ -513,11 +570,11 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                       <td className="p-3 border border-black text-center font-bold">
                          {item.kompetensi === 'Pengetahuan dan Pemahaman' ? 'L1' : item.kompetensi === 'Aplikasi' ? 'L2' : 'L3'}
                       </td>
-                      <td className="p-3 border border-black text-justify leading-tight">{item.indikatorSoal}</td>
+                      <td className="p-3 border border-black text-justify leading-tight font-black">{item.indikatorSoal}</td>
                       <td className="p-3 border border-black text-center uppercase text-[8pt] font-bold">{item.bentukSoal} {item.bentukSoal === 'Pilihan Ganda Kompleks' ? `(${item.subBentukSoal})` : ''}</td>
                       <td className="p-3 border border-black">
                          {item.stimulus && (
-                            <div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic">
+                            <div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic font-black">
                                {renderSoalContent(item.stimulus, item, true, true)}
                             </div>
                          )}
@@ -540,8 +597,14 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                       <span className="font-black text-lg min-w-[2rem]">{item.nomorSoal}.</span>
                       <div className="flex-1 space-y-5">
                          {item.stimulusImage && (<div className="flex justify-center my-6"><img src={item.stimulusImage} className="max-w-[300px] border-4 border-white shadow-xl rounded-xl p-1" /></div>)}
-                         {item.stimulus && (<div className="p-6 bg-slate-50 border-2 border-black rounded-[1.5rem] text-[10.5pt] italic leading-relaxed text-justify shadow-inner">{renderSoalContent(item.stimulus, item, true, true)}</div>)}
-                         <div className="text-[11pt] leading-relaxed text-slate-900">{renderSoalContent(item.soal, item, true, false)}</div>
+                         {item.stimulus && (
+                           <div className="p-8 bg-slate-50 border-2 border-black rounded-[2rem] text-[10.5pt] italic leading-relaxed text-justify shadow-inner font-black">
+                             {renderSoalContent(item.stimulus, item, true, true)}
+                           </div>
+                         )}
+                         <div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">
+                           {renderSoalContent(item.soal, item, true, false)}
+                         </div>
                       </div>
                     </div>
                   </div>
@@ -591,8 +654,8 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6 p-5 bg-slate-50 rounded-2xl">
-          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">FASE {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100 disabled:text-slate-400" value={fase} onChange={e => {setFase(e.target.value as Fase); updateFaseByKelas(kelas);}}>{Object.values(Fase).map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">KELAS {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100 disabled:text-slate-400" value={kelas} onChange={e => setKelas(e.target.value as Kelas)}>{fase === Fase.A && <><option value="1">1</option><option value="2">2</option></>}{fase === Fase.B && <><option value="3">3</option><option value="4">4</option></>} {fase === Fase.C && <><option value="5">5</option><option value="6">6</option></>}</select></div>
+          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">FASE {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100" value={fase} onChange={e => {setFase(e.target.value as Fase); updateFaseByKelas(kelas);}}>{Object.values(Fase).map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">KELAS {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100" value={kelas} onChange={e => setKelas(e.target.value as Kelas)}>{fase === Fase.A && <><option value="1">1</option><option value="2">2</option></>}{fase === Fase.B && <><option value="3">3</option><option value="4">4</option></>} {fase === Fase.C && <><option value="5">5</option><option value="6">6</option></>}</select></div>
           <div><label className="text-[10px] font-black text-slate-400 block mb-1">MAPEL</label><select className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold" value={mapel} onChange={e => setMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
           <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 block mb-1">ASESMEN</label><select className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold" value={namaAsesmen} onChange={e => setNamaAsesmen(e.target.value)}><option value="">Pilih Asesmen</option>{availableAsesmenNames.map(n => <option key={n}>{n}</option>)}</select></div>
         </div>
@@ -625,7 +688,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                         <option value="">Pilih TP</option>
                         {tps.filter(t => t.kelas === kelas && t.mataPelajaran === mapel).map(t => <option key={t.id} value={t.id}>{t.tujuanPembelajaran}</option>)}
                       </select>
-                      <div className="text-[9px] text-slate-505 italic leading-tight">{item.tujuanPembelajaran}</div>
+                      <div className="text-[9px] text-slate-505 italic leading-tight font-black">{item.tujuanPembelajaran}</div>
                     </td>
                     <td className="px-6 py-4">
                       <select className="w-full bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-[10px] font-black text-indigo-700 outline-none" value={item.kompetensi} onChange={e => updateKisiKisi(item.id, 'kompetensi', e.target.value as any)}>
@@ -653,7 +716,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                       )}
                     </td>
                     <td className="px-6 py-4 relative group">
-                      <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-bold italic leading-relaxed min-h-[100px]" value={item.indikatorSoal} onChange={e => updateKisiKisi(item.id, 'indikatorSoal', e.target.value)} />
+                      <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic leading-relaxed min-h-[100px]" value={item.indikatorSoal} onChange={e => updateKisiKisi(item.id, 'indikatorSoal', e.target.value)} />
                       <button onClick={() => generateIndikatorAI(item)} disabled={aiLoadingMap[`ind-${item.id}`]} className="absolute bottom-6 right-8 text-indigo-600 bg-white p-1 rounded shadow-sm hover:bg-slate-50 active:scale-95 transition-all">
                         {aiLoadingMap[`ind-${item.id}`] ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14}/>}
                       </button>
@@ -662,19 +725,19 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                        <div className="grid grid-cols-2 gap-4 h-full">
                           <div className="flex flex-col h-full">
                              <div className="flex items-center justify-between text-[9px] font-black text-indigo-600 uppercase mb-2">
-                                <div className="flex items-center gap-1.5"><BookText size={12}/> Stimulus</div>
+                                <div className="flex items-center gap-1.5"><BookText size={12}/> Informasi / Teks Bacaan</div>
                                 <button onClick={() => triggerImageAI(item)} disabled={aiLoadingMap[`img-${item.id}`]} className="p-1 hover:bg-white rounded transition-all text-indigo-400 hover:text-indigo-600">
                                    {aiLoadingMap[`img-${item.id}`] ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12}/>}
                                 </button>
                              </div>
                              <div className="relative">
-                                <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-medium italic leading-relaxed min-h-[160px]" value={item.stimulus} placeholder="Tuliskan teks bacaan atau buat tabel di sini..." onChange={e => updateKisiKisi(item.id, 'stimulus', e.target.value)} />
+                                <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic leading-relaxed min-h-[160px]" value={item.stimulus} placeholder="Tuliskan narasi informasi atau data di sini..." onChange={e => updateKisiKisi(item.id, 'stimulus', e.target.value)} />
                                 {item.stimulusImage && <img src={item.stimulusImage} className="w-20 h-20 object-cover mt-2 rounded-lg border border-white shadow-md absolute bottom-2 right-2" alt="Preview"/>}
                              </div>
                              <div className="mt-2 overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner">{renderSoalContent(item.stimulus, item)}</div>
                           </div>
                           <div className="space-y-3 flex flex-col">
-                             <div><span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pertanyaan & Opsi:</span><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] font-bold min-h-[120px]" value={item.soal} onChange={e => updateKisiKisi(item.id, 'soal', e.target.value)} placeholder="Tulis butir soal..." /></div>
+                             <div><span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Butir Soal & Pilihan:</span><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] font-black min-h-[120px]" value={item.soal} onChange={e => updateKisiKisi(item.id, 'soal', e.target.value)} placeholder="Masukkan kalimat tanya dan daftar pilihan..." /></div>
                              <div className="overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner mb-2">{renderSoalContent(item.soal, item)}</div>
                              <div className="flex items-center gap-2 mt-auto"><span className="text-[9px] font-black uppercase text-slate-400">Kunci:</span><input className="flex-1 bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-black text-indigo-600" value={item.kunciJawaban} onChange={e => updateKisiKisi(item.id, 'kunciJawaban', e.target.value)} placeholder="Jawaban benar..." /></div>
                           </div>
@@ -721,7 +784,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                                  <div className="space-y-6">
                                     {(item.stimulus || item.stimulusImage) && (
                                       <div>
-                                         <p className="font-bold text-[11px] italic text-slate-600 mb-2">Cermatilah teks atau gambar berikut untuk menjawab soal nomor {item.nomorSoal}:</p>
+                                         <p className="font-bold text-[11px] italic text-slate-600 mb-2">Cermatilah teks bacaan atau gambar berikut untuk menjawab soal nomor {item.nomorSoal}:</p>
                                          <div className="p-8 bg-slate-50 rounded-[2rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden mb-6">
                                             <div className="absolute top-0 right-0 p-4 opacity-5 text-indigo-600"><BookText size={64}/></div>
                                             {item.stimulusImage && (
@@ -729,11 +792,11 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                                                   <img src={item.stimulusImage} className="max-w-[400px] rounded-2xl border-4 border-white shadow-2xl" alt="Stimulus" />
                                                </div>
                                             )}
-                                            <div className="text-[10.5pt] leading-relaxed text-slate-800 italic">{renderSoalContent(item.stimulus, item, true, true)}</div>
+                                            <div className="text-[10.5pt] leading-relaxed text-slate-800 italic font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>
                                          </div>
                                       </div>
                                     )}
-                                    <div className="text-slate-900 text-[11pt] leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div>
+                                    <div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div>
                                  </div>
                               </td>
                            </tr>

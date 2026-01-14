@@ -2,8 +2,31 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UploadedFile, Kelas } from "../types";
 
-const cleanJsonString = (str: string): string => {
-  return str.replace(/```json/g, '').replace(/```/g, '').trim();
+/**
+ * Fungsi ekstraksi JSON yang ditingkatkan kekuatannya.
+ */
+const cleanAndParseJson = (str: string): any => {
+  try {
+    // Bersihkan karakter kontrol dan spasi aneh
+    let cleaned = str.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+
+    // Temukan blok JSON terdalam (mencegah teks tambahan di luar JSON merusak parser)
+    const firstOpen = cleaned.indexOf('{');
+    const lastClose = cleaned.lastIndexOf('}');
+    
+    if (firstOpen === -1 || lastClose === -1 || lastClose < firstOpen) {
+      // Jika format hancur total, coba bersihkan markdown
+      const fallback = cleaned.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(fallback);
+    }
+
+    const jsonPart = cleaned.substring(firstOpen, lastClose + 1);
+    return JSON.parse(jsonPart);
+  } catch (e: any) {
+    console.error("JSON Parse Failure:", e);
+    console.error("Payload attempted:", str);
+    throw new Error("Respon AI terputus atau tidak lengkap. Hal ini biasanya karena gangguan jaringan. Silakan klik tombol 'Wand' kembali.");
+  }
 };
 
 const getAiClient = (apiKey?: string) => {
@@ -34,7 +57,7 @@ export const analyzeDocuments = async (files: UploadedFile[], prompt: string, ap
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     contents: { parts: [...fileParts, { text: prompt }] },
-    config: { systemInstruction: "Pakar kurikulum SD. Jawaban ringkas dan profesional." }
+    config: { systemInstruction: "Pakar kurikulum SD. Jawaban ringkas." }
   });
   return response.text || "AI tidak memberikan respon.";
 };
@@ -60,13 +83,11 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
     },
     contents: `Analisis CP ini menjadi TP linear untuk SD Kelas ${kelas}: "${cpContent}".`,
   });
-  return JSON.parse(cleanJsonString(response.text || '[]'));
+  return cleanAndParseJson(response.text || '[]');
 };
 
 export const completeATPDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Lengkapi detail ATP SD Kelas ${kelas}. TP: "${tp}" | Materi: "${materi}".`;
-
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -84,9 +105,9 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         }
       }
     },
-    contents: prompt,
+    contents: `Lengkapi ATP: TP: "${tp}" | Materi: "${materi}".`,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const recommendPedagogy = async (tp: string, alurAtp: string, materi: string, kelas: string, apiKey?: string) => {
@@ -103,35 +124,13 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
         }
       }
     },
-    contents: `Berikan 1 nama model pembelajaran paling relevan untuk TP SD: "${tp}"`,
+    contents: `Rekomendasi model pembelajaran SD untuk TP: "${tp}"`,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Susun Rencana Pembelajaran Mendalam (RPM) SD Kelas ${kelas} dengan sangat DETAIL and TERURAI. 
-  
-  REFERENSI UTAMA:
-  - TP: "${tp}"
-  - Materi: "${materi}"
-  - Model Pembelajaran (Sintaks): "${praktikPedagogis}"
-  - Jumlah Pertemuan: ${jumlahPertemuan}
-  
-  INSTRUKSI KHUSUS LANGKAH PEMBELAJARAN (3M):
-  1. Uraikan langkah secara kronologis and sangat detail sesuai sintaks model "${praktikPedagogis}".
-  2. FORMAT: Gunakan daftar bernomor vertikal (1., 2., 3., dst). 
-  3. KRITIKAL: Setiap langkah harus berisi satu instruksi operasional yang JELAS (apa yang dilakukan guru & siswa).
-  4. WAJIB: Di setiap AKHIR kalimat/langkah, berikan klasifikasi filosofis dalam kurung siku, pilih salah satu: [Menggembirakan], [Bermakna], atau [Berkesadaran].
-  
-  STRUKTUR OUTPUT (JSON):
-  - kemitraan: Sebutkan pihak eksternal/lingkungan yang terlibat.
-  - lingkunganBelajar: Penataan kelas/lokasi.
-  - pemanfaatanDigital: Alat bantu digital yang dipakai.
-  - kegiatanAwal: Langkah awal pemahaman (Min 3 langkah per pertemuan).
-  - kegiatanInti: Langkah aplikasi sesuai sintaks model (Min 6 langkah per pertemuan).
-  - kegiatanPenutup: Langkah refleksi (Min 3 langkah per pertemuan).`;
-
   const response = await ai.models.generateContent({
     model: COMPLEX_MODEL,
     config: { 
@@ -146,21 +145,16 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kegiatanInti: { type: Type.STRING },
           kegiatanPenutup: { type: Type.STRING }
         }
-      }
+      },
+      thinkingConfig: { thinkingBudget: 1000 }
     },
-    contents: prompt,
+    contents: `Susun RPM SD Kelas ${kelas}. TP: "${tp}", Materi: "${materi}", Model: "${praktikPedagogis}".`,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const generateJournalNarrative = async (kelas: string, mapel: string, materi: string, refRpm?: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  let prompt = `Bantu susun narasi jurnal harian guru SD Kelas ${kelas}. Mapel: ${mapel}. Topik: ${materi}.`;
-  
-  if (refRpm) {
-    prompt += `\nReferensi RPM: Model ${refRpm.praktikPedagogis}.`;
-  }
-
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -173,9 +167,9 @@ export const generateJournalNarrative = async (kelas: string, mapel: string, mat
         }
       }
     },
-    contents: prompt,
+    contents: `Narasi jurnal guru SD. Mapel: ${mapel}. Topik: ${materi}.`,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
@@ -211,32 +205,13 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
         }
       }
     },
-    contents: `Susun 3 jenis instrumen asesmen LENGKAP (AWAL, PROSES, AKHIR) untuk SD Kelas ${kelas}. TP: "${tp}". Materi: "${materi}".`,
+    contents: `Susun 3 instrumen asesmen SD Kelas ${kelas}. TP: "${tp}".`,
   });
-  return cleanJsonString(response.text || '[]');
+  return cleanAndParseJson(response.text || '[]');
 };
 
 export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const count = rpm.jumlahPertemuan || 1;
-  const prompt = `Susun Lembar Kerja Peserta Didik (LKPD) SD yang LENGKAP untuk ${count} PERTEMUAN.
-  
-  REFERENSI RPM:
-  - TP: "${rpm.tujuanPembelajaran}"
-  - Materi: "${rpm.materi}"
-  - Langkah Inti (RPM): "${rpm.kegiatanInti}"
-  
-  ATURAN KHUSUS MULTI-PERTEMUAN:
-  Jika jumlah pertemuan adalah ${count} (> 1), maka setiap properti di bawah ini (materiRingkas, langkahKerja, tugasMandiri, refleksi) WAJIB menggunakan penanda eksplisit "Pertemuan 1:", "Pertemuan 2:", dst. untuk memisahkan konten antar sesi.
-  
-  STRUKTUR OUTPUT (JSON):
-  - petunjuk: Panduan umum mengerjakan LKPD.
-  - alatBahan: Daftar alat and bahan dari RPM.
-  - materiRingkas: Ringkasan materi.
-  - langkahKerja: Langkah praktis siswa.
-  - tugasMandiri: Tantangan spesifik / Tugas Mandiri.
-  - refleksi: Pertanyaan refleksi siswa.`;
-
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: { 
@@ -253,19 +228,16 @@ export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
         }
       }
     },
-    contents: prompt,
+    contents: `Susun LKPD SD. TP: "${rpm.tujuanPembelajaran}".`,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const generateIndikatorSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Buatlah 1 kalimat Indikator Soal RINGKAS untuk SD Kelas ${item.kelas} berdasarkan TP berikut.
-  
+  const prompt = `Buatlah 1 kalimat Indikator Soal untuk SD Kelas ${item.kelas}. 
   TP: "${item.tujuanPembelajaran}"
-  Level Kompetensi: "${item.kompetensi}"
-  
-  ATURAN: Gunakan struktur standar: "Disajikan [Gambar/Teks/dll], siswa dapat..."`;
+  WAJIB gunakan format: "Disajikan Teks/Bacaan/Gambar siswa dapat ...."`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -278,47 +250,55 @@ export const generateButirSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
   
   let structureHint = "";
-  if (item.bentukSoal === 'Menjodohkan') {
+  if (item.bentukSoal === 'Pilihan Ganda') {
     structureHint = `
-    ATURAN KHUSUS MENJODOHKAN:
-    - Gunakan tabel markdown dengan tepat 3 kolom.
-    - Header: | PERNYATAAN | | PILIHAN JAWABAN |
-    - Kolom tengah kosongkan saja.
+    WAJIB UNTUK PILIHAN GANDA:
+    1. Masukkan pertanyaan di field 'soal'.
+    2. Masukkan 4 pilihan jawaban: A, B, C, D.
+    3. SETIAP label (A., B., C., D.) WAJIB berada di baris baru.
     `;
   } else if (item.bentukSoal === 'Pilihan Ganda Kompleks') {
-    if (item.subBentukSoal === 'Multiple Answer') {
+    if (item.subBentukSoal === 'Grid') {
       structureHint = `
-      VARIASI: Multiple Choice Multiple Answer (Soal AKM).
-      - Fokus pada literasi bacaan atau numerasi.
-      - Buat minimal 5 pernyataan/opsi yang menuntut analisis.
-      - Berikan tanda [] di depan setiap opsi.
-      - Instruksikan siswa untuk memilih SEMUA pernyataan yang benar (minimal 2 jawaban benar).
+      WAJIB UNTUK PILIHAN GANDA KOMPLEKS (Tipe GRID/ASOSIASI):
+      1. Field 'stimulus' (Teks Bacaan) HANYA berisi narasi atau data teks.
+      2. Field 'soal' diawali kalimat instruksi: "Berdasarkan teks tersebut, tentukan Benar atau Salah pada setiap pernyataan berikut!"
+      3. DILARANG menggunakan kata 'stimulus' dalam instruksi soal. Gunakan kata 'Teks' atau 'Bacaan' atau 'Informasi'.
+      4. SETELAH instruksi di field 'soal', buat TABEL MARKDOWN dengan header PERSIS: | Pernyataan | Benar | Salah |
+      5. Isi minimal 4-5 baris pernyataan.
+      6. Contoh isi field 'soal':
+         Berdasarkan teks tersebut, tentukan Benar atau Salah pada setiap pernyataan berikut!
+         | Pernyataan | Benar | Salah |
+         | Ibu membeli 5 kg beras | | |
+         | Harga beras adalah Rp 10.000 | | |
       `;
     } else {
       structureHint = `
-      VARIASI: Asosiasi/Grid (Pernyataan Benar-Salah / Sesuai-Tidak Sesuai).
-      - WAJIB: Sajikan dalam tabel markdown 3 KOLOM SAJA: | Pernyataan | Benar | Salah |
-      - Jangan menambah kolom lain. 
-      - Berikan minimal 4 pernyataan kritis terkait stimulus.
-      - Instruksikan siswa untuk memberi tanda centang pada kolom Benar atau Salah.
+      WAJIB UNTUK PILIHAN GANDA KOMPLEKS (Multiple Answer):
+      1. Field 'stimulus' (Teks Bacaan) HANYA berisi narasi atau data.
+      2. Field 'soal' WAJIB diawali Kalimat Pertanyaan (contoh: "Berdasarkan teks tersebut, pilihlah semua pernyataan yang benar...").
+      3. DILARANG menggunakan kata 'stimulus' dalam instruksi soal. Gunakan 'Teks' atau 'Informasi'.
+      4. SETELAH kalimat pertanyaan di field 'soal', masukkan pilihan jawaban format [] di setiap awal baris.
       `;
     }
+  } else if (item.bentukSoal === 'Menjodohkan') {
+    structureHint = `
+    WAJIB UNTUK MENJODOHKAN:
+    1. Field 'stimulus' (Teks Bacaan/Informasi) HANYA berisi narasi data.
+    2. Field 'soal' diawali kalimat instruksi: "Berdasarkan teks tersebut, jodohkanlah pernyataan di sebelah kiri dengan pilihan yang tepat di sebelah kanan!"
+    3. DILARANG menggunakan kata 'stimulus'. Gunakan 'Teks'.
+    4. Gunakan TABEL MARKDOWN 3 KOLOM dengan kolom tengah KOSONG.
+    5. Format header WAJIB: | Pernyataan | | Pilihan Jawaban |
+    6. BARIS DATA harus murni isi, jangan masukkan kata 'Pernyataan' atau 'Pilihan' lagi di baris data.
+    7. Minimal 5 pasang penjodohan yang logis.
+    `;
   }
 
-  const prompt = `Buatlah 1 butir soal Asesmen SD Kelas ${item.kelas} yang berkualitas tinggi (Level Hots/AKM) sesuai Indikator.
-  
+  const prompt = `Buatlah 1 butir soal Asesmen SD Kelas ${item.kelas} (Level Hots/AKM).
   INDIKATOR: "${item.indikatorSoal}"
-  BENTUK SOAL: "${item.bentukSoal}" ${item.subBentukSoal ? `(Varian: ${item.subBentukSoal})` : ''}
+  BENTUK: "${item.bentukSoal}"
   ${structureHint}
-  
-  PENTING UNTUK PG KOMPLEKS:
-  Jika numerasi, berikan angka-angka yang menantang (perkalian/pembagian/skala).
-  Jika literasi, berikan pilihan jawaban yang sangat mirip/mengecoh (distraktor kuat).
-  
-  OUTPUT DALAM JSON:
-  - stimulus: (Optional) Narasi pendukung soal/instruksi khusus.
-  - soal: Kalimat soal lengkap dengan format yang diminta (Opsi/Tabel).
-  - kunci: Jawaban benar (Sebutkan semua kunci jika multiple answer).`;
+  WAJIB: Jawab HANYA dalam JSON valid. Jangan menggunakan kata 'stimulus'.`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -330,40 +310,26 @@ export const generateButirSoal = async (item: any, apiKey?: string) => {
           stimulus: { type: Type.STRING },
           soal: { type: Type.STRING },
           kunci: { type: Type.STRING }
-        }
-      }
+        },
+        required: ["soal", "kunci"]
+      },
+      thinkingConfig: { thinkingBudget: 0 }
     },
     contents: prompt,
   });
-  return JSON.parse(cleanJsonString(response.text || '{}'));
+  
+  return cleanAndParseJson(response.text || '{}');
 };
 
 export const generateAiImage = async (context: string, kelas: Kelas, kunci?: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  
-  let visualPrompt = `Ultra-simple, minimalist flat 2D vector clipart for primary school kids (SD Kelas ${kelas}). 
-  Topic: ${context.substring(0, 200)}. `;
-  
-  if (kunci) {
-    visualPrompt += `Visual focus: Draw exactly the amount or objects matching the key "${kunci}". `;
-  }
-
-  visualPrompt += `Visual Style: Solid shapes, thick clean black outlines, high contrast bright colors, white solid background. 
-  NO gradients, NO shadows, NO detailed textures, NO text. 
-  Keep the image very simple and clean.`;
-
   const response = await ai.models.generateContent({
     model: IMAGE_MODEL,
-    config: {
-      imageConfig: { aspectRatio: "1:1" }
-    },
-    contents: { parts: [{ text: visualPrompt }] },
+    config: { imageConfig: { aspectRatio: "1:1" } },
+    contents: { parts: [{ text: `Flat vector clipart SD Kelas ${kelas}: ${context.substring(0, 150)}` }] },
   });
-
   for (const part of response.candidates[0].content.parts) {
-    if (part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
-    }
+    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   }
   return null;
 };

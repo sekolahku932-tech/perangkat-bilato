@@ -29,7 +29,6 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
-  // Fix: Removed duplicate 'principalName' property in settings state initialization
   const [settings, setSettings] = useState<SchoolSettings>({
     schoolName: user.school,
     address: 'Jl. Trans Sulawesi, Kec. Bilato',
@@ -166,20 +165,23 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
   };
 
   const handleGenerateNarrative = async (item: JurnalItem) => {
-    // Fix: Removed apiKey check per GenAI guidelines
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ Gagal: API Key belum diatur!', type: 'warning' });
+      return;
+    }
     setIsLoadingAI(item.id);
     try {
       const refRpm = rpmData.find(r => r.materi === item.materi && r.mataPelajaran === item.mataPelajaran);
-      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm);
+      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm, user.apiKey);
       if (result) {
         await updateDoc(doc(db, "jurnal_harian", item.id), {
-          detail_kegiatan: result.detail_kegiatan,
+          detailKegiatan: result.detail_kegiatan,
           praktikPedagogis: result.pedagogik
         });
-        setMessage({ text: 'Narasi berhasil disusun AI!', type: 'success' });
+        setMessage({ text: 'Narasi disusun AI (Flash Mode)!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
-    } catch (e: any) { setMessage({ text: 'Gagal memanggil AI. Periksa kuota API.', type: 'error' }); } 
+    } catch (e: any) { setMessage({ text: 'Gagal memanggil AI.', type: 'error' }); } 
     finally { setIsLoadingAI(null); }
   };
 
@@ -232,7 +234,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
 
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95">
             <div className="p-8 text-center">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
               <h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus Jurnal?</h3>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle } from 'lucide-react';
@@ -150,11 +151,15 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   };
 
   const handleAIComplete = async (id: string) => {
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ API Key diperlukan untuk fitur AI!', type: 'warning' });
+      return;
+    }
     const item = atpData.find(i => i.id === id);
     if (!item || !item.tujuanPembelajaran) return;
     setIsProcessingId(id);
     try {
-      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas);
+      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas, user.apiKey);
       if (suggestions) {
         await updateDoc(doc(db, "atp", id), {
           alurTujuanPembelajaran: suggestions.alurTujuan,
@@ -169,7 +174,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (err) {
-      setMessage({ text: 'Gagal AI. Periksa koneksi atau kuota API.', type: 'error' });
+      setMessage({ text: 'AI Error: Periksa API Key atau kuota.', type: 'error' });
     } finally { setIsProcessingId(null); }
   };
 
@@ -220,7 +225,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         <div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all animate-in slide-in-from-right ${
           message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
           message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-          'bg-red-50 border-red-100 text-red-800'
+          'bg-red-50 border-red-200 text-red-800'
         }`}>
           {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
           <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>

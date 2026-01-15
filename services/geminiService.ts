@@ -2,32 +2,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UploadedFile, Kelas } from "../types";
 
-/**
- * Fungsi ekstraksi JSON yang sangat tangguh.
- * Mencegah error .trim() pada non-string dan menangani blok kode markdown.
- */
 const cleanAndParseJson = (str: any): any => {
   if (str === null || str === undefined) return null;
-  
-  // Jika input sudah berupa objek/array, tidak perlu diproses lagi
   if (typeof str !== 'string') return str;
-
   try {
-    // Bersihkan karakter kontrol dan spasi luar
     let cleaned = str.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
-    
-    // Hilangkan blok kode markdown jika ada
     if (cleaned.includes('```')) {
       cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
     }
-
-    // Cari posisi awal JSON (Objek atau Array)
     const firstOpen = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
-    
     let startIndex = -1;
     let lastIndex = -1;
-    
     if (firstOpen !== -1 && (firstBracket === -1 || firstOpen < firstBracket)) {
       startIndex = firstOpen;
       lastIndex = cleaned.lastIndexOf('}');
@@ -35,37 +21,22 @@ const cleanAndParseJson = (str: any): any => {
       startIndex = firstBracket;
       lastIndex = cleaned.lastIndexOf(']');
     }
-
-    if (startIndex === -1 || lastIndex === -1 || lastIndex < startIndex) {
-      // Fallback: coba parse string mentah jika pola tidak ditemukan
-      return JSON.parse(cleaned);
-    }
-    
+    if (startIndex === -1 || lastIndex === -1 || lastIndex < startIndex) return JSON.parse(cleaned);
     const jsonPart = cleaned.substring(startIndex, lastIndex + 1);
     return JSON.parse(jsonPart);
   } catch (e: any) {
-    console.error("Critical JSON Parse Error:", e, "Input:", str);
-    // Kembalikan struktur kosong yang aman agar UI tidak crash
+    console.error("JSON Parse Error:", e);
     return str.startsWith('[') ? [] : {};
   }
 };
 
-/**
- * Mendapatkan client AI.
- * Memprioritaskan personal API Key milik guru.
- */
 const getAiClient = (providedApiKey?: string) => {
   const finalKey = (providedApiKey && providedApiKey.trim() !== "") 
     ? providedApiKey.trim() 
     : (process.env.API_KEY || "");
-    
   return new GoogleGenAI({ apiKey: finalKey });
 };
 
-/** 
- * MENGGUNAKAN FLASH UNTUK SEMUA TUGAS 
- * Model Pro sering memberikan error 429 pada hosting karena kuota free tier yang sangat kecil.
- */
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
 const COMPLEX_MODEL = 'gemini-3-flash-preview'; 
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
@@ -81,15 +52,12 @@ export const startAIChat = async (systemInstruction: string, apiKey?: string) =>
 export const analyzeDocuments = async (files: UploadedFile[], prompt: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
   const fileParts = files.map(file => ({
-    inlineData: {
-      data: file.base64.split(',')[1],
-      mimeType: file.type
-    }
+    inlineData: { data: file.base64.split(',')[1], mimeType: file.type }
   }));
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     contents: { parts: [...fileParts, { text: prompt }] },
-    config: { systemInstruction: "Pakar kurikulum Sekolah Dasar Indonesia." }
+    config: { systemInstruction: "Pakar Kurikulum SD Indonesia. Analisis dokumen dengan tajam dan solutif." }
   });
   return response.text || "AI tidak merespon.";
 };
@@ -113,7 +81,7 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
         }
       }
     },
-    contents: `Analisis CP: "${cpContent}" untuk Kelas ${kelas}.`,
+    contents: `Analisis CP Kelas ${kelas}: "${cpContent}"`,
   });
   return cleanAndParseJson(response.text);
 };
@@ -137,7 +105,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         }
       }
     },
-    contents: `Lengkapi ATP: TP: "${tp}", Materi: "${materi}", Kelas ${kelas}.`,
+    contents: `Lengkapi detail ATP: TP "${tp}"`,
   });
   return cleanAndParseJson(response.text);
 };
@@ -150,19 +118,37 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
-        properties: {
-          modelName: { type: Type.STRING },
-          reason: { type: Type.STRING }
-        }
+        properties: { modelName: { type: Type.STRING }, reason: { type: Type.STRING } }
       }
     },
-    contents: `Rekomendasi model pembelajaran SD: "${tp}"`,
+    contents: `Rekomendasi model pembelajaran untuk TP: "${tp}"`,
   });
   return cleanAndParseJson(response.text);
 };
 
 export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Susun RPM SD Kelas ${kelas} untuk ${jumlahPertemuan} pertemuan secara spesifik dan terurai dengan kalimat yang PANJANG dan NARATIF.
+  TP: "${tp}"
+  MATERI: "${materi}"
+  MODEL: ${praktikPedagogis}
+  
+  INSTRUKSI KHUSUS WAJIB:
+  1. JABARKAN aktivitas dengan kalimat yang lebih panjang, lengkap, dan deskriptif (menguraikan interaksi guru dan siswa secara hidup).
+  2. JANGAN menuliskan kembali judul bagian seperti "I. MEMAHAMI", "II. MENGAPLIKASI", atau "III. MEREFLEKSI" di awal teks narasi.
+  3. JANGAN menyertakan label sintaks seperti "Sintaks [Nama Model]" atau "Langkah [Nomor]" di awal teks, karena nomor otomatis akan dibuat oleh UI.
+  4. Uraikan langkah secara mendalam mengikuti SINTAKS MODEL "${praktikPedagogis}" secara berurut.
+  5. Gunakan format penomoran "Pertemuan X:" untuk memisahkan konten antar pertemuan.
+  6. SETIAP PERTEMUAN pada bagian I. MEMAHAMI (Awal) WAJIB dimulai dengan ritual berikut (tuliskan secara naratif panjang):
+     - Mengawali dengan doa bersama dan rasa syukur kepada Tuhan YME. [Berkesadaran]
+     - Melakukan pengecekan kehadiran (absensi) dan memastikan kesiapan emosional siswa. [Berkesadaran]
+     - Menyampaikan Tujuan Pembelajaran yang akan dicapai agar siswa memahami relevansi materi. [Bermakna]
+  7. Di dalam setiap langkah aktivitas, sertakan label filosofi: [Berkesadaran], [Bermakna], atau [Menggembirakan] pada aktivitas yang relevan secara proporsional.
+  8. Struktur 3M sebagai bingkai kerja:
+     - Memahami (Awal/Appersepsi/Motivasi/Ritual Pembuka)
+     - Mengaplikasi (Inti/Eksplorasi sesuai Sintaks Model)
+     - Merefleksi (Penutup/Simpulan/Selebrasi)`;
+
   const response = await ai.models.generateContent({
     model: COMPLEX_MODEL,
     config: { 
@@ -173,13 +159,13 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING },
-          kegiatanInti: { type: Type.STRING },
-          kegiatanPenutup: { type: Type.STRING }
+          kegiatanAwal: { type: Type.STRING, description: "Narasi ritual doa, absensi, dan TP yang diuraikan panjang untuk tiap pertemuan" },
+          kegiatanInti: { type: Type.STRING, description: "Narasi detail sintaks model pembelajaran untuk tiap pertemuan" },
+          kegiatanPenutup: { type: Type.STRING, description: "Narasi refleksi dan penguatan bermakna untuk tiap pertemuan" }
         }
       }
     },
-    contents: `Susun RPM SD Kelas ${kelas}. TP: "${tp}". Model: ${praktikPedagogis}.`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };
@@ -192,19 +178,30 @@ export const generateJournalNarrative = async (kelas: string, mapel: string, mat
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
-        properties: {
-          detail_kegiatan: { type: Type.STRING },
-          pedagogik: { type: Type.STRING }
-        }
+        properties: { detail_kegiatan: { type: Type.STRING }, pedagogik: { type: Type.STRING } }
       }
     },
-    contents: `Buat narasi jurnal harian guru SD Kelas ${kelas}: ${mapel} - ${materi}.`,
+    contents: `Buat jurnal harian: Kelas ${kelas}, Mapel ${mapel}, Materi ${materi}.`,
   });
   return cleanAndParseJson(response.text);
 };
 
-export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
+export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, stepsContext: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Susun instrumen asesmen lengkap (Awal, Proses, Akhir) untuk SD Kelas ${kelas}.
+  TP: "${tp}"
+  MATERI: "${materi}"
+  
+  CONTEXT LANGKAH PEMBELAJARAN (WAJIB SINKRON):
+  "${stepsContext}"
+  
+  INSTRUKSI:
+  1. Asesmen harus sejalan dengan langkah pembelajaran yang diuraikan di atas.
+  2. ASESMEN PROSES (Formatif) harus mengukur aktivitas spesifik yang ada pada langkah pembelajaran (misal: rubrik diskusi jika ada diskusi, lembar observasi jika ada kerja kelompok).
+  3. Gunakan teknik dan bentuk yang variatif sesuai Kurikulum Merdeka.
+  4. Rubrik harus memiliki kriteria yang jelas (Level 4 sampai 1).
+  5. WAJIB menyediakan instrumen untuk AWAL, PROSES, dan AKHIR.`;
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: { 
@@ -214,7 +211,7 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
         items: {
           type: Type.OBJECT,
           properties: {
-            kategori: { type: Type.STRING },
+            kategori: { type: Type.STRING, description: "ASESMEN AWAL, ASESMEN PROSES, atau ASESMEN AKHIR" },
             teknik: { type: Type.STRING },
             bentuk: { type: Type.STRING },
             instruksi: { type: Type.STRING },
@@ -236,7 +233,7 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
         }
       }
     },
-    contents: `Susun instrumen asesmen dan rubrik: "${tp}".`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };
@@ -259,24 +256,22 @@ export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
         }
       }
     },
-    contents: `Susun LKPD sinkron RPM: TP: "${rpm.tujuanPembelajaran}".`,
+    contents: `Buat LKPD Sinkron RPM: "${rpm.tujuanPembelajaran}"`,
   });
   return cleanAndParseJson(response.text);
 };
 
 export const generateIndikatorSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Buat 1 kalimat Indikator Soal AKM SD Kelas ${item.kelas}. TP: "${item.tujuanPembelajaran}". Format: "Disajikan teks/gambar, siswa dapat ...."`;
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
-    contents: prompt
+    contents: `Buat indikator soal AKM Kelas ${item.kelas}: "${item.tujuanPembelajaran}"`
   });
   return response.text || "";
 };
 
 export const generateButirSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Buat soal AKM SD Kelas ${item.kelas}.\nINDIKATOR: "${item.indikatorSoal}"\nBENTUK: "${item.bentukSoal}"\nOutput JSON valid dengan key: stimulus, soal, kunci.`;
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -291,7 +286,7 @@ export const generateButirSoal = async (item: any, apiKey?: string) => {
         required: ["soal", "kunci"]
       }
     },
-    contents: prompt,
+    contents: `Buat soal untuk indikator: "${item.indikatorSoal}"`,
   });
   return cleanAndParseJson(response.text);
 };
@@ -302,11 +297,11 @@ export const generateAiImage = async (context: string, kelas: Kelas, kunci?: str
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
       config: { imageConfig: { aspectRatio: "1:1" } },
-      contents: { parts: [{ text: `Flat vector simple education clipart, SD Kelas ${kelas}: ${context.substring(0, 100)}` }] },
+      contents: { parts: [{ text: `Flat education clipart SD Kelas ${kelas}: ${context.substring(0, 100)}` }] },
     });
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-  } catch (e) { console.error("Img Gen Error", e); }
+  } catch (e) { console.error(e); }
   return null;
 };

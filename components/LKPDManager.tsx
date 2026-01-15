@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, LKPDItem, RPMItem, MATA_PELAJARAN, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Rocket, Sparkles, Loader2, CheckCircle2, Printer, Cloud, FileText, Split, AlertTriangle, FileDown, Wand2, PencilLine, Lock, Brain, Zap, RefreshCw, PenTool, Search, AlertCircle, X, ArrowRight, Hammer, Download } from 'lucide-react';
@@ -133,6 +134,10 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
   };
 
   const handleGenerateAI = async (id: string) => {
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ API Key diperlukan!', type: 'warning' });
+      return;
+    }
     const lkpd = lkpdList.find(l => l.id === id);
     if (!lkpd) return;
     const rpm = rpmList.find(r => r.id === lkpd.rpmId);
@@ -143,7 +148,7 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
 
     setIsLoadingAI(true);
     try {
-      const result = await generateLKPDContent(rpm);
+      const result = await generateLKPDContent(rpm, user.apiKey);
       if (result) {
         await updateDoc(doc(db, "lkpd", id), { ...result });
         setMessage({ text: 'Konten LKPD Sinkron dengan Langkah RPM!', type: 'success' });
@@ -151,7 +156,7 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
       }
     } catch (err: any) {
       console.error(err);
-      setMessage({ text: 'AI Gagal: ' + (err.message || 'Cek kuota'), type: 'error' });
+      setMessage({ text: 'AI Gagal: Kuota Limit 429 atau API Key salah.', type: 'error' });
     } finally {
       setIsLoadingAI(false);
     }
@@ -175,22 +180,17 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
     if (!text || text === '-') return Array(count).fill('');
     const pattern = /Pertemuan\s*(\d+)\s*:?/gi;
     const parts = text.split(pattern);
-    if (parts.length === 1 && count > 1) {
+    if (parts.length <= 1 && count > 1) {
       const result = Array(count).fill('');
       result[0] = text;
       return result;
     }
     const result = Array(count).fill('');
-    for (let i = 0; i < parts.length; i++) {
-        const p = parts[i].trim();
-        const mNum = parseInt(p);
-        if (!isNaN(mNum) && mNum > 0 && mNum <= count) {
+    for (let i = 1; i < parts.length; i += 2) {
+        const mNum = parseInt(parts[i]);
+        if (mNum > 0 && mNum <= count) {
             result[mNum - 1] = (parts[i + 1] || '').trim();
-            i++;
         }
-    }
-    if (count > 1 && result.slice(1).every(r => r === '') && text.length > 50) {
-       if (result[0] === '') result[0] = text;
     }
     return result;
   };

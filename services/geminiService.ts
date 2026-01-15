@@ -128,25 +128,27 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
 
 export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Susun RPM SD Kelas ${kelas} untuk ${jumlahPertemuan} pertemuan secara spesifik dan terurai.
+  const prompt = `Susun RPM SD Kelas ${kelas} untuk TOTAL ${jumlahPertemuan} pertemuan.
   TP: "${tp}"
   MATERI: "${materi}"
   MODEL: ${praktikPedagogis}
   
-  INSTRUKSI KHUSUS WAJIB (FORMAT LIST):
-  1. JABARKAN aktivitas dalam kalimat yang PANJANG, NARATIF, dan DESKRIPTIF (minimal 20-30 kata per butir).
-  2. SETIAP butir aktivitas WAJIB diawali dengan nomor urut (1., 2., 3., dst) dan dipisahkan baris baru agar tampil vertikal ke bawah.
-  3. JANGAN menuliskan kembali judul bagian ("I. MEMAHAMI", dll) di awal teks narasi.
-  4. SETIAP PERTEMUAN (pertemuan 1, 2, dst) pada bagian Awal (MEMAHAMI) WAJIB dimulai dengan 3 butir naratif panjang terpisah:
-     1. Guru mengawali pembelajaran dengan mengajak seluruh siswa melakukan doa pembuka bersama dan memanjatkan rasa syukur kepada Tuhan YME untuk menciptakan ketenangan batin sebelum mereka belajar. [Berkesadaran]
-     2. Guru melakukan pemeriksaan kehadiran atau absensi siswa satu per satu sambil memberikan sapaan hangat untuk memastikan kesiapan fisik dan emosional setiap anak sebelum kegiatan dimulai. [Berkesadaran]
-     3. Guru menyampaikan secara jelas Tujuan Pembelajaran yang ingin dicapai pada hari ini beserta relevansi materi tersebut dalam kehidupan nyata siswa agar mereka memahami pentingnya tanggung jawab belajar. [Bermakna]
-  5. Langkah selanjutnya sesuai sintaks model "${praktikPedagogis}" juga harus diuraikan dalam butir-butir bernomor dengan kalimat yang mendalam.
-  6. Gunakan label filosofi: [Berkesadaran], [Bermakna], atau [Menggembirakan] di akhir butir yang relevan.
-  7. Struktur 3M Bingkai Utama:
-     - Memahami (Awal/Appersepsi/Ritual)
-     - Mengaplikasi (Inti/Eksplorasi sesuai Sintaks Model)
-     - Merefleksi (Penutup/Simpulan/Selebrasi)`;
+  INSTRUKSI KHUSUS MULTI-PERTEMUAN (WAJIB):
+  1. Karena RPM ini untuk ${jumlahPertemuan} pertemuan, Anda WAJIB memisahkan konten di dalam SETIAP kolom (kegiatanAwal, kegiatanInti, kegiatanPenutup) menggunakan label "Pertemuan 1:", "Pertemuan 2:", dst.
+  2. JABARKAN aktivitas dalam rincian butir-butir bernomor (1., 2., 3., dst) dengan kalimat yang PANJANG, NARATIF, dan DESKRIPTIF.
+  3. JANGAN menuliskan kembali judul bagian ("I. MEMAHAMI", dsb) di dalam teks.
+  4. Bagian Awal (kegiatanAwal) SETIAP PERTEMUAN WAJIB berisi rincian: Doa Bersama [Berkesadaran], Absensi & Cek Emosional [Berkesadaran], serta Penyampaian TP & Relevansi Materi [Bermakna].
+  5. Bagian Inti (kegiatanInti) harus menjabarkan fase model "${praktikPedagogis}" secara mendalam untuk tiap pertemuan.
+  6. Bagian Penutup (kegiatanPenutup) harus berisi refleksi mendalam dan selebrasi [Menggembirakan] untuk tiap pertemuan.
+  
+  CONTOH FORMAT DALAM SETIAP KOLOM:
+  Pertemuan 1:
+  1. (Narasi aktivitas panjang...)
+  2. (Narasi aktivitas panjang...)
+  
+  Pertemuan 2:
+  1. (Narasi aktivitas panjang...)
+  2. (Narasi aktivitas panjang...)`;
 
   const response = await ai.models.generateContent({
     model: COMPLEX_MODEL,
@@ -158,9 +160,9 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING, description: "Minimal 3 butir bernomor (Ritual Pembuka) yang diuraikan secara naratif panjang" },
-          kegiatanInti: { type: Type.STRING, description: "Butir-butir bernomor sesuai sintaks model yang diuraikan secara naratif panjang" },
-          kegiatanPenutup: { type: Type.STRING, description: "Butir-butir bernomor untuk refleksi naratif panjang" }
+          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" },
+          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" },
+          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" }
         }
       }
     },

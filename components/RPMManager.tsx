@@ -195,8 +195,8 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     if (cleanMeetingTags) processedText = text.replace(/Pertemuan\s*\d+\s*:?\s*/gi, '');
     
     const cleaningRegex = /^(\d+[\.\)]|\-|\*|•)\s*/;
-    // Peningkatan regex untuk membuang label judul bagian yang redundan
-    const redundantHeaderRegex = /^(I\.|II\.|III\.|I\s|II\s|III\s)?\s*(MEMAHAMI|MENGAPLIKASI|MEREFLEKSI|Sintaks|SINTAKS)\s*(\(.*\))?:?\s*$/i;
+    // Regex lebih agresif untuk membuang baris judul yang mungkin mengandung teks appersepsi atau nama model
+    const redundantHeaderRegex = /^(\d+[\.\)])?\s*(I\.|II\.|III\.|I\s|II\s|III\s)?\s*(MEMAHAMI|MENGAPLIKASI|MEREFLEKSI|Sintaks|SINTAKS|MODEL|Langkah-langkah|Butir-butir|Rincian)\s*(\(.*\))?:?\s*$/i;
 
     let rawLines = processedText.split(/\n+/);
     let validLines: string[] = [];
@@ -205,13 +205,13 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         const trimmed = line.trim();
         if (!trimmed) return;
         
-        // Buang baris yang hanya berisi judul bagian
+        // Buang baris yang hanya berisi judul bagian redundan
         if (redundantHeaderRegex.test(trimmed)) return;
 
         const innerSplits = trimmed.split(/\s+(?=\d+[\.\)])/g);
         innerSplits.forEach(part => {
             const cleaned = part.trim().replace(cleaningRegex, '').trim();
-            // Validasi ulang setelah pembersihan nomor agar tidak ada baris judul yang lolos
+            // Validasi ulang agar tidak ada baris judul yang lolos setelah pembersihan nomor
             if (cleaned.length > 0 && !redundantHeaderRegex.test(cleaned)) {
                validLines.push(cleaned);
             }
@@ -223,12 +223,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     return (
       <ul className="space-y-6 list-none">
         {validLines.map((cleanedStep, i) => (
-          <li key={i} className="flex gap-4 items-start group">
-            <span className="shrink-0 font-black text-slate-800 mt-1 min-w-[2.2rem] h-9 w-9 bg-slate-100 rounded-xl flex items-center justify-center text-[13px] border border-slate-200 shadow-sm group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
+          <li key={i} className="flex gap-5 items-start group">
+            <span className="shrink-0 font-black text-slate-800 mt-1 min-w-[2.4rem] h-10 w-10 bg-slate-100 rounded-2xl flex items-center justify-center text-[14px] border border-slate-200 shadow-sm group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
               {i + 1}
             </span>
-            <div className="flex-1 pt-1.5">
-              <span className="leading-relaxed text-justify text-slate-700 text-[13.5px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
+            <div className="flex-1 pt-2">
+              <span className="leading-relaxed text-justify text-slate-700 text-[14px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
             </div>
           </li>
         ))}
@@ -247,13 +247,13 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>
-              body { font-family: 'Inter', sans-serif; background: white; padding: 20px; color: black; }
+              body { font-family: 'Inter', sans-serif; background: white; padding: 20px; color: black; line-height: 1.6; }
               @media print { .no-print { display: none !important; } body { padding: 0; } }
               .break-inside-avoid { page-break-inside: avoid; }
               table { border-collapse: collapse; width: 100%; border: 1.5px solid black; }
               th, td { border: 1px solid black; padding: 4px; }
               ul { padding: 0; margin: 0; list-style: none; }
-              li { margin-bottom: 12px; page-break-inside: avoid; }
+              li { margin-bottom: 15px; page-break-inside: avoid; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body>
@@ -622,7 +622,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         </div>
       )}
 
-      {deleteConfirmId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95"><div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus RPM</h3><p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris RPM ini?</p></div><div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-lg">HAPUS</button></div></div></div>)}
+      {deleteConfirmId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95"><div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus RPM</h3><p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris RPM ini?</p></div><div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition-all">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 transition-all shadow-lg">HAPUS</button></div></div></div>)}
 
       {isEditing && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">

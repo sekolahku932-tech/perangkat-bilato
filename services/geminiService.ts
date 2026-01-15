@@ -128,24 +128,23 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
 
 export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Susun RPM SD Kelas ${kelas} untuk ${jumlahPertemuan} pertemuan secara spesifik dan terurai dengan kalimat yang PANJANG dan NARATIF.
+  const prompt = `Susun RPM SD Kelas ${kelas} untuk ${jumlahPertemuan} pertemuan secara spesifik dan terurai.
   TP: "${tp}"
   MATERI: "${materi}"
   MODEL: ${praktikPedagogis}
   
-  INSTRUKSI KHUSUS WAJIB:
-  1. JABARKAN aktivitas dengan kalimat yang lebih panjang, lengkap, dan deskriptif (menguraikan rincian interaksi guru dan siswa secara nyata).
-  2. JANGAN PERNAH menuliskan kembali judul bagian (seperti "I. MEMAHAMI", "II. MENGAPLIKASI", "III. MEREFLEKSI", "Sintaks [Nama Model]", atau "Langkah [Nomor]") di awal teks narasi karena UI sudah menyediakannya.
-  3. LANGSUNG mulai pada rincian isi aktivitas tanpa basa-basi judul bagian.
-  4. SETIAP PERTEMUAN (pertemuan 1, 2, dst) pada bagian Awal (MEMAHAMI) WAJIB dimulai dengan rincian naratif berikut (tuliskan masing-masing dalam kalimat panjang):
-     - Guru mengawali pembelajaran dengan mengajak seluruh siswa melakukan doa pembuka bersama dan memanjatkan rasa syukur kepada Tuhan YME untuk menciptakan ketenangan batin. [Berkesadaran]
-     - Guru melakukan pemeriksaan kehadiran atau absensi siswa satu per satu sambil memberikan sapaan hangat untuk memastikan kesiapan fisik dan emosional setiap anak sebelum belajar. [Berkesadaran]
-     - Guru menyampaikan secara jelas Tujuan Pembelajaran yang ingin dicapai pada hari ini beserta relevansi materi tersebut dalam kehidupan nyata siswa agar pembelajaran menjadi lebih terarah. [Bermakna]
-  5. Uraikan langkah-langkah selanjutnya sesuai sintaks model "${praktikPedagogis}" secara mendalam dan berurut ke bawah.
-  6. Gunakan format penomoran "Pertemuan X:" untuk memisahkan konten antar pertemuan jika jumlahPertemuan > 1.
-  7. Di dalam setiap rincian aktivitas, sertakan label filosofi kurikulum merdeka: [Berkesadaran], [Bermakna], atau [Menggembirakan] pada akhir kalimat yang relevan.
-  8. Struktur 3M sebagai Bingkai Utama (Langsung isi rincian per bagian):
-     - Memahami (Awal/Appersepsi/Ritual Pembuka)
+  INSTRUKSI KHUSUS WAJIB (FORMAT LIST):
+  1. JABARKAN aktivitas dalam kalimat yang PANJANG, NARATIF, dan DESKRIPTIF (minimal 20-30 kata per butir).
+  2. SETIAP butir aktivitas WAJIB diawali dengan nomor urut (1., 2., 3., dst) dan dipisahkan baris baru agar tampil vertikal ke bawah.
+  3. JANGAN menuliskan kembali judul bagian ("I. MEMAHAMI", dll) di awal teks narasi.
+  4. SETIAP PERTEMUAN (pertemuan 1, 2, dst) pada bagian Awal (MEMAHAMI) WAJIB dimulai dengan 3 butir naratif panjang terpisah:
+     1. Guru mengawali pembelajaran dengan mengajak seluruh siswa melakukan doa pembuka bersama dan memanjatkan rasa syukur kepada Tuhan YME untuk menciptakan ketenangan batin sebelum mereka belajar. [Berkesadaran]
+     2. Guru melakukan pemeriksaan kehadiran atau absensi siswa satu per satu sambil memberikan sapaan hangat untuk memastikan kesiapan fisik dan emosional setiap anak sebelum kegiatan dimulai. [Berkesadaran]
+     3. Guru menyampaikan secara jelas Tujuan Pembelajaran yang ingin dicapai pada hari ini beserta relevansi materi tersebut dalam kehidupan nyata siswa agar mereka memahami pentingnya tanggung jawab belajar. [Bermakna]
+  5. Langkah selanjutnya sesuai sintaks model "${praktikPedagogis}" juga harus diuraikan dalam butir-butir bernomor dengan kalimat yang mendalam.
+  6. Gunakan label filosofi: [Berkesadaran], [Bermakna], atau [Menggembirakan] di akhir butir yang relevan.
+  7. Struktur 3M Bingkai Utama:
+     - Memahami (Awal/Appersepsi/Ritual)
      - Mengaplikasi (Inti/Eksplorasi sesuai Sintaks Model)
      - Merefleksi (Penutup/Simpulan/Selebrasi)`;
 
@@ -159,9 +158,9 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING, description: "Rincian ritual doa, absensi, dan TP yang diuraikan secara naratif panjang" },
-          kegiatanInti: { type: Type.STRING, description: "Jabarkan rincian langkah sintaks model pembelajaran secara naratif panjang dan vertikal" },
-          kegiatanPenutup: { type: Type.STRING, description: "Rincian langkah refleksi dan selebrasi secara naratif panjang" }
+          kegiatanAwal: { type: Type.STRING, description: "Minimal 3 butir bernomor (Ritual Pembuka) yang diuraikan secara naratif panjang" },
+          kegiatanInti: { type: Type.STRING, description: "Butir-butir bernomor sesuai sintaks model yang diuraikan secara naratif panjang" },
+          kegiatanPenutup: { type: Type.STRING, description: "Butir-butir bernomor untuk refleksi naratif panjang" }
         }
       }
     },
@@ -192,14 +191,13 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
   TP: "${tp}"
   MATERI: "${materi}"
   
-  CONTEXT LANGKAH PEMBELAJARAN (SINKRONKAN DENGAN INI):
+  CONTEXT LANGKAH PEMBELAJARAN:
   "${stepsContext}"
   
   INSTRUKSI:
-  1. Instrumen asesmen harus selaras dan sinkron dengan narasi aktivitas pembelajaran di atas.
-  2. ASESMEN PROSES (Formatif) harus mengukur aktivitas spesifik yang nyata dilakukan siswa dalam langkah tersebut.
-  3. Gunakan teknik dan bentuk yang variatif sesuai Kurikulum Merdeka.
-  4. Rubrik harus memiliki kriteria yang jelas (Level 4 sampai 1).`;
+  1. Asesmen harus selaras dengan narasi butir aktivitas di atas.
+  2. ASESMEN PROSES (Formatif) harus mengukur aktivitas spesifik dalam langkah.
+  3. Gunakan teknik dan bentuk yang variatif sesuai Kurikulum Merdeka.`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,

@@ -195,7 +195,6 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     if (cleanMeetingTags) processedText = text.replace(/Pertemuan\s*\d+\s*:?\s*/gi, '');
     
     const cleaningRegex = /^(\d+[\.\)]|\-|\*|•)\s*/;
-    // Regex agresif untuk membuang judul bagian redundan dan sintaks model di awal
     const redundantHeaderRegex = /^(\d+[\.\)])?\s*(I\.|II\.|III\.|I\s|II\s|III\s)?\s*(MEMAHAMI|MENGAPLIKASI|MEREFLEKSI|Sintaks|SINTAKS|MODEL|Langkah-langkah|Rincian|Kegiatan)\s*(\(.*\))?:?\s*$/i;
 
     let rawLines = processedText.split(/\n+/);
@@ -205,13 +204,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         const trimmed = line.trim();
         if (!trimmed) return;
         
-        // Buang baris jika itu hanya pengulangan judul bagian
         if (redundantHeaderRegex.test(trimmed)) return;
 
+        // Mencoba memecah baris jika ada nomor urut di tengah kalimat (antisipasi output AI tertentu)
         const innerSplits = trimmed.split(/\s+(?=\d+[\.\)])/g);
         innerSplits.forEach(part => {
             const cleaned = part.trim().replace(cleaningRegex, '').trim();
-            // Validasi ulang setelah dibersihkan nomor urutnya
             if (cleaned.length > 0 && !redundantHeaderRegex.test(cleaned)) {
                validLines.push(cleaned);
             }
@@ -221,14 +219,17 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     if (validLines.length === 0) return '-';
 
     return (
-      <ul className="space-y-6 list-none">
+      <ul className="space-y-6 list-none flex flex-col items-stretch">
         {validLines.map((cleanedStep, i) => (
           <li key={i} className="flex gap-5 items-start group">
-            <span className="shrink-0 font-black text-slate-800 mt-1 min-w-[2.4rem] h-10 w-10 bg-slate-100 rounded-2xl flex items-center justify-center text-[14px] border border-slate-200 shadow-sm group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
-              {i + 1}
-            </span>
-            <div className="flex-1 pt-2">
-              <span className="leading-relaxed text-justify text-slate-700 text-[14.5px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
+            <div className="shrink-0 flex flex-col items-center">
+              <span className="font-black text-slate-800 min-w-[2.5rem] h-10 w-10 bg-slate-100 rounded-2xl flex items-center justify-center text-[15px] border border-slate-200 shadow-sm group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
+                {i + 1}
+              </span>
+              {i < validLines.length - 1 && <div className="w-0.5 flex-1 bg-slate-100 mt-2 min-h-[1.5rem]"></div>}
+            </div>
+            <div className="flex-1 pt-2 pb-1">
+              <span className="leading-relaxed text-justify text-slate-700 text-[14px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
             </div>
           </li>
         ))}
@@ -252,8 +253,9 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
               .break-inside-avoid { page-break-inside: avoid; }
               table { border-collapse: collapse; width: 100%; border: 1.5px solid black; }
               th, td { border: 1px solid black; padding: 4px; }
-              ul { padding: 0; margin: 0; list-style: none; }
-              li { margin-bottom: 15px; page-break-inside: avoid; }
+              ul { padding: 0; margin: 0; list-style: none; display: flex; flex-direction: column; }
+              li { margin-bottom: 18px; page-break-inside: avoid; display: flex; align-items: flex-start; gap: 12px; }
+              .num-bubble { min-width: 28px; height: 28px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11px; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body>
@@ -606,7 +608,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500 relative theme-dpl">
-      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${
+      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all animate-in slide-in-from-right ${
         message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
         message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
         'bg-red-50 border-red-200 text-red-800'

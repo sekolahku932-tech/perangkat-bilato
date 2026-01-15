@@ -13,19 +13,17 @@ interface AsesmenManagerProps {
   user: User;
 }
 
-// Fungsi pembantu untuk mengacak array dengan seed yang stabil
+// Fungsi pengacak stabil berdasarkan seed
 const seededShuffle = <T,>(array: T[], seed: string): T[] => {
   const arr = [...array];
   let seedNum = 0;
   for (let i = 0; i < seed.length; i++) {
     seedNum += seed.charCodeAt(i);
   }
-  
   const random = () => {
-    const x = Math.sin(seedNum++) * 10000;
-    return x - Math.floor(x);
+    seedNum = (seedNum * 9301 + 49297) % 233280;
+    return seedNum / 233280;
   };
-
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -51,7 +49,6 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   const [loading, setLoading] = useState(true);
   const [aiLoadingMap, setAiLoadingMap] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showAddAsesmenModal, setShowAddAsesmenModal] = useState(false);
   const [modalInputValue, setModalInputValue] = useState('');
 
@@ -73,9 +70,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         updateFaseByKelas(user.kelas as Kelas);
       }
       if (user.mapelDiampu && user.mapelDiampu.length > 0) {
-        if (!user.mapelDiampu.includes(mapel)) {
-          setMapel(user.mapelDiampu[0]);
-        }
+        if (!user.mapelDiampu.includes(mapel)) setMapel(user.mapelDiampu[0]);
       }
     }
   }, [user]);
@@ -103,7 +98,6 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const unsubAtp = onSnapshot(qAtp, (snapshot) => {
       setTps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
     });
-
     const qKisi = query(collection(db, "kisikisi"), where("school", "==", user.school));
     const unsubKisi = onSnapshot(qKisi, (snapshot) => {
       setKisikisi(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as KisiKisiItem[]);
@@ -168,29 +162,20 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   };
 
   const generateIndikatorAI = async (item: KisiKisiItem) => {
-    if (!item.tujuanPembelajaran) {
-        setMessage({ text: "Pilih TP terlebih dahulu!", type: "warning" });
-        return;
-    }
+    if (!item.tujuanPembelajaran) return;
     setAiLoadingMap(prev => ({ ...prev, [`ind-${item.id}`]: true }));
     try {
       const indikator = await generateIndikatorSoal(item, user.apiKey);
-      if (indikator) {
-          await updateKisiKisi(item.id, 'indikatorSoal', indikator);
-      }
+      if (indikator) await updateKisiKisi(item.id, 'indikatorSoal', indikator);
     } catch (e: any) {
-      console.error("AI Indikator Error:", e);
-      setMessage({ text: "Gagal: Sinyal AI terputus.", type: "error" });
+      setMessage({ text: "AI Gagal merespon. Periksa API Key.", type: "error" });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`ind-${item.id}`]: false })); 
     }
   };
 
   const generateSoalAI = async (item: KisiKisiItem) => {
-    if (!item.indikatorSoal) {
-        setMessage({ text: "Buat Indikator Soal terlebih dahulu!", type: "warning" });
-        return;
-    }
+    if (!item.indikatorSoal) return;
     setAiLoadingMap(prev => ({ ...prev, [`soal-${item.id}`]: true }));
     try {
       const result = await generateButirSoal(item, user.apiKey);
@@ -204,21 +189,14 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (e: any) {
-      console.error("AI Soal Error:", e);
-      setMessage({ 
-        text: "Gagal menyusun soal: Respon AI tidak lengkap atau terputus. Silakan coba kembali.", 
-        type: "error" 
-      });
+      setMessage({ text: "AI Gagal menyusun soal. Periksa API Key.", type: "error" });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`soal-${item.id}`]: false })); 
     }
   };
 
   const triggerImageAI = async (item: KisiKisiItem) => {
-     if (!item.indikatorSoal) { 
-        setMessage({ text: "Buat Indikator Soal dulu!", type: "warning" }); 
-        return; 
-     }
+     if (!item.indikatorSoal) return;
      setAiLoadingMap(prev => ({ ...prev, [`img-${item.id}`]: true }));
      try {
         const context = item.stimulus || item.indikatorSoal;
@@ -227,12 +205,9 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
            await updateDoc(doc(db, "kisikisi", item.id), { stimulusImage: base64 });
            setMessage({ text: "Gambar AI berhasil disimpan!", type: "success" });
            setTimeout(() => setMessage(null), 3000);
-        } else {
-           throw new Error("AI tidak mengembalikan gambar.");
         }
      } catch (e: any) {
-        console.error(e);
-        setMessage({ text: "Gagal membuat gambar: Gangguan server AI.", type: "error" });
+        setMessage({ text: "Gagal membuat gambar.", type: "error" });
      } finally {
         setAiLoadingMap(prev => ({ ...prev, [`img-${item.id}`]: false }));
      }
@@ -240,17 +215,13 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
   const renderSoalContent = (content: string, item: KisiKisiItem, isPrint = false, isStimulus = false) => {
     if (!content) return null;
-    
-    // Tahap Pre-Processing Cerdas:
     let preprocessed = content
       .replace(/([A-D][\.\)])\s/g, '\n$1 ') 
       .replace(/(\S)\s*\[\s*\]/g, '$1\n[]') 
       .replace(/\[\s?\]/g, 'CHECKBOX_MARKER');
-
     if (item.bentukSoal === 'Isian' && !isStimulus && !preprocessed.includes('....')) {
        preprocessed = preprocessed.trim().replace(/\.*$/, '') + ' ....................................';
     }
-
     const lines = preprocessed.split('\n');
     const renderedParts: React.ReactNode[] = [];
     let currentTableRows: string[][] = [];
@@ -259,21 +230,13 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const flushParagraph = (key: string) => {
       if (currentParagraphLines.length > 0) {
         const isMultipleAnswer = item.bentukSoal === 'Pilihan Ganda Kompleks' && item.subBentukSoal === 'Multiple Answer';
-        
         renderedParts.push(
           <div key={key} className={`whitespace-pre-wrap text-justify leading-relaxed ${item.bentukSoal === 'Isian' ? (isPrint ? 'mb-8' : 'mb-6') : 'mb-4'}`}>
             {currentParagraphLines.map((line, li) => {
               const trimmedLine = line.trim();
               if (!trimmedLine) return null;
-
               const hasMarker = line.includes('CHECKBOX_MARKER') || trimmedLine.startsWith('[]');
-              const instructionKeywords = /^(Berdasarkan|Manakah|Pilihlah|Sesuai|Tentukan|Perhatikan|Instruksi|Jodohkanlah)/i;
-              const isActuallyInstruction = instructionKeywords.test(trimmedLine.replace(/CHECKBOX_MARKER|\[\]/g, '').trim());
-
-              const shouldRenderAsCheckbox = isMultipleAnswer && hasMarker && !isActuallyInstruction;
               const optionMatch = trimmedLine.match(/^([A-E])[\.\)]\s+(.*)/);
-
-              // 1. Render Pilihan Ganda (A, B, C, D)
               if (optionMatch && item.bentukSoal === 'Pilihan Ganda') {
                 const [_, label, text] = optionMatch;
                 return (
@@ -283,26 +246,17 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                   </div>
                 );
               }
-
-              // 2. Render Opsi Multiple Answer (Kotak Centang)
-              if (shouldRenderAsCheckbox) {
+              if (isMultipleAnswer && hasMarker) {
                 return (
                   <div key={li} className="flex items-start gap-4 mb-3 pl-1">
-                    <div className={`shrink-0 border-2 border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-5 h-5'} bg-white flex items-center justify-center shadow-sm`}>
-                    </div>
-                    <span className={`${isPrint ? 'text-[11px]' : 'text-[13px]'} leading-tight font-black flex-1 pt-0.5`}>
-                       {line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}
-                    </span>
+                    <div className={`shrink-0 border-2 border-black rounded-sm ${isPrint ? 'w-4 h-4' : 'w-5 h-5'} bg-white flex items-center justify-center shadow-sm`}></div>
+                    <span className={`${isPrint ? 'text-[11px]' : 'text-[13px]'} leading-tight font-black flex-1 pt-0.5`}>{line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}</span>
                   </div>
                 );
               }
-
-              // 3. Render Teks Biasa (Pertanyaan / Narasi)
               return (
                 <div key={li} className="flex items-start gap-2 mb-2">
-                  <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-relaxed font-black`}>
-                    {line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}
-                  </span>
+                  <span className={`${isPrint ? 'text-[11px]' : 'text-[14px]'} leading-relaxed font-black`}>{line.replace(/CHECKBOX_MARKER|\[\]/g, '').trim()}</span>
                 </div>
               );
             })}
@@ -315,8 +269,6 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const flushTable = (key: string) => {
       if (currentTableRows.length > 0) {
         let rows = currentTableRows.map(r => r.filter(c => c !== undefined).map(c => c.trim()));
-        
-        // Filter baris pemisah markdown (:---) agar tidak mengotori UI
         rows = rows.filter(r => !r.some(c => c.match(/^[:\-\s]+$/)));
         rows = rows.filter(r => r.join('').length > 0);
         
@@ -327,91 +279,81 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         
         let dataRows = rows;
         if (isMatching) {
-            // Deteksi Header untuk dibuang pada tipe Menjodohkan
             const firstRowJoined = rows[0].join(' ').toLowerCase();
             if (firstRowJoined.includes('pernyataan') || firstRowJoined.includes('pilihan')) {
                 dataRows = rows.slice(1);
             }
             
-            // LOGIKA PENGACAKAN UNTUK MENJODOHKAN
+            // LOGIKA PENGACAKAN STABIL UNTUK MENJODOHKAN
             const leftItems = dataRows.map(r => r[0]).filter(Boolean);
             const rightItems = dataRows.map(r => r[2] || r[1] || '').filter(Boolean);
-            
-            // Acak kedua sisi secara independen menggunakan seeded shuffle agar tidak berubah saat re-render
-            const shuffledLeft = seededShuffle(leftItems, item.id + '-left');
-            const shuffledRight = seededShuffle(rightItems, item.id + '-right');
+            const shuffledLeft = seededShuffle(leftItems, item.id + '-L');
+            const shuffledRight = seededShuffle(rightItems, item.id + '-R');
             
             const maxLength = Math.max(shuffledLeft.length, shuffledRight.length);
             dataRows = Array.from({ length: maxLength }, (_, i) => [
               shuffledLeft[i] || '',
-              '', // Kolom tengah kosong untuk garis
+              '', 
               shuffledRight[i] || ''
             ]);
         }
-        
-        if (dataRows.length === 0) { currentTableRows = []; return; }
 
         renderedParts.push(
-          <div key={key} className={`my-8 overflow-x-auto ${isMatching ? '' : 'rounded-[1rem] border-2 border-black shadow-sm overflow-hidden'}`}>
-            <table className={`border-collapse w-full ${isPrint ? 'text-[10px]' : 'text-[12px]'} table-fixed`}>
-              <colgroup>
-                {isGrid ? (
-                  <><col style={{ width: '60%' }} /><col style={{ width: '20%' }} /><col style={{ width: '20%' }} /></>
-                ) : isMatching ? (
-                  <><col style={{ width: '40%' }} /><col style={{ width: '20%' }} /><col style={{ width: '40%' }} /></>
-                ) : null}
-              </colgroup>
-              {!isMatching && (
+          <div key={key} className={`my-8 ${isMatching ? 'w-full' : 'overflow-x-auto rounded-[1rem] border-2 border-black shadow-sm overflow-hidden'}`}>
+            {isMatching ? (
+              <div className="space-y-4">
+                {dataRows.map((row, ri) => (
+                  <div key={ri} className="grid grid-cols-[1fr,80px,1fr] gap-4 items-center">
+                    <div className="relative border-2 border-rose-600 rounded-2xl px-5 py-4 font-black text-slate-800 text-center shadow-sm bg-white min-h-[4rem] flex items-center justify-center">
+                      <span className={isPrint ? 'text-[10px]' : 'text-[12px]'}>{row[0]}</span>
+                      <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow flex items-center justify-center">
+                        <div className="w-1 h-1 bg-white rounded-full"></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center h-full relative">
+                       <div className="w-full h-px border-t border-dashed border-slate-300"></div>
+                    </div>
+                    <div className="relative border-2 border-indigo-600 rounded-2xl px-5 py-4 font-black text-slate-800 text-center shadow-sm bg-white min-h-[4rem] flex items-center justify-center">
+                      <div className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-4 bg-indigo-600 rounded-full border-2 border-white shadow flex items-center justify-center">
+                        <div className="w-1 h-1 bg-white rounded-full"></div>
+                      </div>
+                      <span className={isPrint ? 'text-[10px]' : 'text-[12px]'}>{row[2]}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <table className={`border-collapse w-full ${isPrint ? 'text-[10px]' : 'text-[12px]'} table-fixed`}>
+                <colgroup>
+                  {isGrid && <><col style={{ width: '60%' }} /><col style={{ width: '20%' }} /><col style={{ width: '20%' }} /></>}
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
                     {rows[0].map((cell, i) => (
-                      <th key={i} className="border-2 border-black p-3 font-black text-center uppercase tracking-tight text-[11px] whitespace-normal leading-tight overflow-hidden text-ellipsis">
-                        {cell}
-                      </th>
+                      <th key={i} className="border-2 border-black p-3 font-black text-center uppercase tracking-tight text-[11px] whitespace-normal leading-tight overflow-hidden text-ellipsis">{cell}</th>
                     ))}
                   </tr>
                 </thead>
-              )}
-              <tbody>
-                {(isMatching ? dataRows : rows.slice(1)).map((row, ri) => (
-                  <tr key={ri} className={`${isMatching ? 'border-none' : 'hover:bg-slate-50/50 transition-colors'}`}>
-                    {row.map((cell, ci) => {
-                      const isMiddleCol = isMatching && ci === 1;
-                      const isGridValueCell = isGrid && ci > 0;
-                      
-                      if (isMatching) {
-                        if (ci === 1) return <td key={ci} className="border-none"></td>;
-                        const side = ci === 0 ? 'left' : 'right';
-                        if (!cell) return <td key={ci} className="border-none"></td>;
+                <tbody>
+                  {rows.slice(1).map((row, ri) => (
+                    <tr key={ri} className="hover:bg-slate-50/50 transition-colors">
+                      {row.map((cell, ci) => {
+                        const isGridValueCell = isGrid && ci > 0;
                         return (
-                          <td key={ci} className="border-none py-2 relative px-1">
-                             <div className={`relative border-2 ${side === 'left' ? 'border-rose-600' : 'border-indigo-600'} rounded-2xl px-4 py-3 font-black text-slate-800 text-center shadow-sm min-h-[3.5rem] flex items-center justify-center bg-white`}>
-                                <div className="leading-tight">{cell}</div>
-                                <div className={`absolute top-1/2 ${side === 'left' ? '-right-2' : '-left-2'} -translate-y-1/2 w-4 h-4 ${side === 'left' ? 'bg-rose-600' : 'bg-indigo-600'} rounded-full border-2 border-white shadow flex items-center justify-center`}>
-                                   <div className="w-1 h-1 bg-white rounded-full"></div>
-                                </div>
-                             </div>
+                          <td key={ci} className={`border-2 border-black p-3 ${isGridValueCell ? 'text-center' : 'text-justify'} align-middle whitespace-normal leading-relaxed overflow-wrap-break-word`}>
+                            {isGridValueCell ? (
+                               <div className="flex justify-center items-center py-2">
+                                 <div className={`${isPrint ? 'w-5 h-5' : 'w-6 h-6'} border-2 border-black rounded-md bg-white shadow-sm flex-shrink-0 flex items-center justify-center`}></div>
+                               </div>
+                            ) : (<div className="min-h-[1.5em] font-black">{cell}</div>)}
                           </td>
                         );
-                      }
-
-                      return (
-                        <td key={ci} className={`border-2 border-black p-3 ${isMiddleCol ? 'text-center' : (isGridValueCell ? 'text-center' : 'text-justify')} align-middle whitespace-normal leading-relaxed overflow-wrap-break-word`}>
-                          {isGridValueCell ? (
-                             <div className="flex justify-center items-center py-2">
-                               <div className={`${isPrint ? 'w-5 h-5' : 'w-6 h-6'} border-2 border-black rounded-md bg-white shadow-sm flex-shrink-0 flex items-center justify-center`}>
-                               </div>
-                             </div>
-                          ) : (
-                            <div className="min-h-[1.5em] font-black">{cell}</div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         );
         currentTableRows = [];
@@ -440,15 +382,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
       <div class="kop"><h2>PEMERINTAH KABUPATEN GORONTALO</h2><h2>${settings.schoolName}</h2><p><i>${settings.address}</i></p></div>
       <div style="text-align:center"><h1>KISI-KISI ASESMEN</h1><p>TAHUN PELAJARAN ${activeYear}</p></div>
       <table border="1">
-        <tr style="background:#f3f4f6">
-          <th>ELEMEN / CP</th>
-          <th>LEVEL</th>
-          <th>INDIKATOR</th>
-          <th>BENTUK</th>
-          <th>TEKS BACAAN & BUTIR SOAL</th>
-          <th>KUNCI</th>
-          <th>NO</th>
-        </tr>
+        <tr style="background:#f3f4f6"><th>ELEMEN / CP</th><th>LEVEL</th><th>INDIKATOR</th><th>BENTUK</th><th>TEKS BACAAN & BUTIR SOAL</th><th>KUNCI</th><th>NO</th></tr>
         ${filteredKisikisi.map((item) => `
           <tr>
             <td><b>${item.elemen}</b><br/><i>${item.cp}</i></td>
@@ -486,15 +420,10 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
               body { font-family: 'Arial', sans-serif; background: white; padding: 20px; color: black; line-height: 1.6; }
-              @media print { 
-                .no-print { display: none !important; } 
-                body { padding: 0; }
-              }
+              @media print { .no-print { display: none !important; } body { padding: 0; } }
               .break-inside-avoid { page-break-inside: avoid; }
-              table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; table-layout: fixed !important; }
-              th, td { border: 1.5px solid black; padding: 6px; overflow-wrap: break-word; }
-              .soal-content-container { width: 100%; }
-              td div { line-height: 1.5; }
+              table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; }
+              th, td { border: 1.5px solid black; padding: 6px; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body>
@@ -522,14 +451,11 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
               <h2 className="text-2xl font-black uppercase leading-tight mt-1">{settings.schoolName}</h2>
               <p className="text-[10px] font-medium italic mt-1 leading-none">{settings.address}</p>
            </div>
-           
            <div className="border-b-[4px] border-double border-black mb-6 mt-3"></div>
-
            <div className="text-center mb-8">
               <h1 className="text-xl font-black uppercase tracking-tight">{isKisiKisi ? 'KISI-KISI ASESMEN' : namaAsesmen}</h1>
               <p className="text-xl font-black uppercase mt-1">TAHUN PELAJARAN {activeYear}</p>
            </div>
-           
            {!isKisiKisi && (
              <div className="border-[1.5px] border-black rounded-[2.5rem] p-8 mb-8">
                 <div className="grid grid-cols-2 gap-x-12">
@@ -549,44 +475,22 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
            {isKisiKisi ? (
               <table className="w-full border-collapse border-2 border-black text-[9pt]">
-                <thead>
-                  <tr className="bg-slate-100 font-black text-center uppercase h-12">
-                    <th className="w-48">ELEMEN / CP</th>
-                    <th className="w-16">LEVEL</th>
-                    <th className="w-64">INDIKATOR</th>
-                    <th className="w-24">BENTUK</th>
-                    <th>TEKS BACAAN & BUTIR SOAL</th>
-                    <th className="w-20">KUNCI</th>
-                    <th className="w-12">NO</th>
-                  </tr>
-                </thead>
+                <thead><tr className="bg-slate-100 font-black text-center uppercase h-12"><th className="w-48">ELEMEN / CP</th><th className="w-16">LEVEL</th><th className="w-64">INDIKATOR</th><th className="w-24">BENTUK</th><th>TEKS BACAAN & BUTIR SOAL</th><th className="w-20">KUNCI</th><th className="w-12">NO</th></tr></thead>
                 <tbody>
                   {filteredKisikisi.map((item) => (
                     <tr key={item.id} className="break-inside-avoid align-top">
-                      <td className="p-3 border border-black">
-                         <p className="font-black uppercase mb-1 leading-tight">{item.elemen}</p>
-                         <p className="text-[8pt] italic text-slate-600 leading-tight">{item.cp}</p>
-                      </td>
-                      <td className="p-3 border border-black text-center font-bold">
-                         {item.kompetensi === 'Pengetahuan dan Pemahaman' ? 'L1' : item.kompetensi === 'Aplikasi' ? 'L2' : 'L3'}
-                      </td>
+                      <td className="p-3 border border-black"><p className="font-black uppercase mb-1 leading-tight">{item.elemen}</p><p className="text-[8pt] italic text-slate-600 leading-tight">{item.cp}</p></td>
+                      <td className="p-3 border border-black text-center font-bold">{item.kompetensi === 'Pengetahuan dan Pemahaman' ? 'L1' : item.kompetensi === 'Aplikasi' ? 'L2' : 'L3'}</td>
                       <td className="p-3 border border-black text-justify leading-tight font-black">{item.indikatorSoal}</td>
                       <td className="p-3 border border-black text-center uppercase text-[8pt] font-bold">{item.bentukSoal} {item.bentukSoal === 'Pilihan Ganda Kompleks' ? `(${item.subBentukSoal})` : ''}</td>
                       <td className="p-3 border border-black">
-                         {item.stimulus && (
-                            <div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic font-black">
-                               {renderSoalContent(item.stimulus, item, true, true)}
-                            </div>
-                         )}
-                         <div className="leading-relaxed">
-                            {renderSoalContent(item.soal, item, true, false)}
-                         </div>
+                         {item.stimulus && (<div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>)}
+                         <div className="leading-relaxed">{renderSoalContent(item.soal, item, true, false)}</div>
                       </td>
                       <td className="p-3 border border-black text-center font-black">{item.kunciJawaban}</td>
                       <td className="p-3 border border-black text-center font-black">{item.nomorSoal}</td>
                     </tr>
                   ))}
-                  {filteredKisikisi.length === 0 && <tr><td colSpan={7} className="text-center py-10 italic">Data kosong.</td></tr>}
                 </tbody>
               </table>
            ) : (
@@ -597,21 +501,14 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                       <span className="font-black text-lg min-w-[2rem]">{item.nomorSoal}.</span>
                       <div className="flex-1 space-y-5">
                          {item.stimulusImage && (<div className="flex justify-center my-6"><img src={item.stimulusImage} className="max-w-[300px] border-4 border-white shadow-xl rounded-xl p-1" /></div>)}
-                         {item.stimulus && (
-                           <div className="p-8 bg-slate-50 border-2 border-black rounded-[2rem] text-[10.5pt] italic leading-relaxed text-justify shadow-inner font-black">
-                             {renderSoalContent(item.stimulus, item, true, true)}
-                           </div>
-                         )}
-                         <div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">
-                           {renderSoalContent(item.soal, item, true, false)}
-                         </div>
+                         {item.stimulus && (<div className="p-8 bg-slate-50 border-2 border-black rounded-[2rem] text-[10.5pt] italic leading-relaxed text-justify shadow-inner font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>)}
+                         <div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
            )}
-
            <div className="mt-16 grid grid-cols-2 text-center text-[10pt] font-black uppercase break-inside-avoid">
               <div><p>Mengetahui,</p><p>{isKisiKisi ? 'Kepala Sekolah' : 'Orang Tua / Wali'}</p><div className="h-20"></div><p className={isKisiKisi ? 'border-b border-black inline-block min-w-[150px]' : ''}>{isKisiKisi ? settings.principalName : '( .................................... )'}</p></div>
               <div><p>Bilato, ........................</p><p>Guru Mata Pelajaran</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[150px]">{user.name}</p></div>
@@ -623,11 +520,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
-      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border transition-all ${
-        message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
-        message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-        'bg-red-50 border-red-200 text-red-800'
-      }`}><CheckCircle2 size={20}/><span>{message.text}</span></div>)}
+      {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}><CheckCircle2 size={20}/><span>{message.text}</span></div>)}
       
       {showAddAsesmenModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
@@ -655,158 +548,42 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6 p-5 bg-slate-50 rounded-2xl">
           <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">FASE {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100" value={fase} onChange={e => {setFase(e.target.value as Fase); updateFaseByKelas(kelas);}}>{Object.values(Fase).map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">KELAS {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100" value={kelas} onChange={e => setKelas(e.target.value as Kelas)}>{fase === Fase.A && <><option value="1">1</option><option value="2">2</option></>}{fase === Fase.B && <><option value="3">3</option><option value="4">4</option></>} {fase === Fase.C && <><option value="5">5</option><option value="6">6</option></>}</select></div>
+          <div><label className="text-[10px] font-black text-slate-400 block mb-1 flex items-center gap-1">KELAS {isClassLocked && <Lock size={8} className="text-amber-500" />}</label><select disabled={isClassLocked} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold disabled:bg-slate-100" value={kelas} onChange={e => setKelas(e.target.value as Kelas)}>{['1','2','3','4','5','6'].map(k => <option key={k} value={k}>{k}</option>)}</select></div>
           <div><label className="text-[10px] font-black text-slate-400 block mb-1">MAPEL</label><select className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold" value={mapel} onChange={e => setMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
           <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 block mb-1">ASESMEN</label><select className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold" value={namaAsesmen} onChange={e => setNamaAsesmen(e.target.value)}><option value="">Pilih Asesmen</option>{availableAsesmenNames.map(n => <option key={n}>{n}</option>)}</select></div>
         </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px]">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4"><Loader2 size={48} className="animate-spin text-rose-600" /><p className="font-black text-xs uppercase tracking-widest">Sinkronisasi Cloud...</p></div>
-        ) : activeTab === 'KISI_KISI' ? (
+        {loading ? (<div className="flex flex-col items-center justify-center py-40 gap-4"><Loader2 size={48} className="animate-spin text-rose-600" /><p className="font-black text-xs uppercase tracking-widest">Memuat...</p></div>) : activeTab === 'KISI_KISI' ? (
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left border-collapse min-w-[1800px] table-fixed">
-              <thead>
-                <tr className="bg-slate-900 text-white text-[10px] font-black h-12 uppercase tracking-widest">
-                  <th className="px-6 py-2 w-16 text-center border-r border-white/5">Idx</th>
-                  <th className="px-6 py-2 w-48">Elemen & TP</th>
-                  <th className="px-6 py-2 w-40 text-center">Level Kognitif</th>
-                  <th className="px-6 py-2 w-48 text-center">Bentuk Soal</th>
-                  <th className="px-6 py-2 w-72">Indikator Soal (AI)</th>
-                  <th className="px-6 py-2 w-[700px]">Konten Soal (Teks, Pertanyaan, Kunci)</th>
-                  <th className="px-6 py-2 w-24 text-center border-l border-white/5">No Soal</th>
-                  <th className="px-6 py-2 w-16 text-center">Aksi</th>
-                </tr>
-              </thead>
+              <thead><tr className="bg-slate-900 text-white text-[10px] font-black h-12 uppercase tracking-widest"><th className="px-6 py-2 w-16 text-center border-r border-white/5">Idx</th><th className="px-6 py-2 w-48">Elemen & TP</th><th className="px-6 py-2 w-40 text-center">Level Kognitif</th><th className="px-6 py-2 w-48 text-center">Bentuk Soal</th><th className="px-6 py-2 w-72">Indikator Soal (AI)</th><th className="px-6 py-2 w-[700px]">Konten Soal</th><th className="px-6 py-2 w-24 text-center border-l border-white/5">No</th><th className="px-6 py-2 w-16 text-center">Aksi</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredKisikisi.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-slate-50 align-top transition-colors">
                     <td className="px-6 py-4 text-center font-black text-slate-300">{idx + 1}</td>
-                    <td className="px-6 py-4">
-                      <select className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold mb-1" value={item.tpId} onChange={e => updateKisiKisi(item.id, 'tpId', e.target.value)}>
-                        <option value="">Pilih TP</option>
-                        {tps.filter(t => t.kelas === kelas && t.mataPelajaran === mapel).map(t => <option key={t.id} value={t.id}>{t.tujuanPembelajaran}</option>)}
-                      </select>
-                      <div className="text-[9px] text-slate-505 italic leading-tight font-black">{item.tujuanPembelajaran}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <select className="w-full bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-[10px] font-black text-indigo-700 outline-none" value={item.kompetensi} onChange={e => updateKisiKisi(item.id, 'kompetensi', e.target.value as any)}>
-                        <option value="Pengetahuan dan Pemahaman">Pengetahuan dan Pemahaman</option>
-                        <option value="Aplikasi">Aplikasi</option>
-                        <option value="Penalaran">Penalaran</option>
-                      </select>
-                    </td>
-                    <td className="px-6 py-4 space-y-2">
-                      <select className="w-full text-[10px] font-bold p-1.5 border rounded-xl bg-slate-50 outline-none" value={item.bentukSoal} onChange={e => updateKisiKisi(item.id, 'bentukSoal', e.target.value as any)}>
-                        <option>Pilihan Ganda</option>
-                        <option>Pilihan Ganda Kompleks</option>
-                        <option>Menjodohkan</option>
-                        <option>Isian</option>
-                        <option>Uraian</option>
-                      </select>
-                      {item.bentukSoal === 'Pilihan Ganda Kompleks' && (
-                        <div className="p-2 bg-rose-50 rounded-lg border border-rose-100 space-y-1">
-                          <label className="text-[8px] font-black uppercase text-rose-600 block leading-tight">Tipe Kompleks:</label>
-                          <select className="w-full text-[9px] font-black p-1 rounded-md border-rose-200 outline-none bg-white" value={item.subBentukSoal || 'Multiple Answer'} onChange={e => updateKisiKisi(item.id, 'subBentukSoal', e.target.value)}>
-                             <option value="Multiple Answer">Multiple Choice Multiple Answer</option>
-                             <option value="Grid">Asosiasi/Grid (B-S)</option>
-                          </select>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 relative group">
-                      <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic leading-relaxed min-h-[100px]" value={item.indikatorSoal} onChange={e => updateKisiKisi(item.id, 'indikatorSoal', e.target.value)} />
-                      <button onClick={() => generateIndikatorAI(item)} disabled={aiLoadingMap[`ind-${item.id}`]} className="absolute bottom-6 right-8 text-indigo-600 bg-white p-1 rounded shadow-sm hover:bg-slate-50 active:scale-95 transition-all">
-                        {aiLoadingMap[`ind-${item.id}`] ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14}/>}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 bg-slate-50/30 relative group">
+                    <td className="px-6 py-4"><select className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold mb-1" value={item.tpId} onChange={e => updateKisiKisi(item.id, 'tpId', e.target.value)}><option value="">Pilih TP</option>{tps.filter(t => t.kelas === kelas && t.mataPelajaran === mapel).map(t => <option key={t.id} value={t.id}>{t.tujuanPembelajaran}</option>)}</select></td>
+                    <td className="px-6 py-4"><select className="w-full bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-[10px] font-black text-indigo-700" value={item.kompetensi} onChange={e => updateKisiKisi(item.id, 'kompetensi', e.target.value as any)}><option value="Pengetahuan dan Pemahaman">L1 (Paham)</option><option value="Aplikasi">L2 (Aplikasi)</option><option value="Penalaran">L3 (Penalaran)</option></select></td>
+                    <td className="px-6 py-4 space-y-2"><select className="w-full text-[10px] font-bold p-1.5 border rounded-xl bg-slate-50" value={item.bentukSoal} onChange={e => updateKisiKisi(item.id, 'bentukSoal', e.target.value as any)}><option>Pilihan Ganda</option><option>Pilihan Ganda Kompleks</option><option>Menjodohkan</option><option>Isian</option><option>Uraian</option></select></td>
+                    <td className="px-6 py-4 relative group"><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic leading-relaxed min-h-[100px]" value={item.indikatorSoal} onChange={e => updateKisiKisi(item.id, 'indikatorSoal', e.target.value)} /><button onClick={() => generateIndikatorAI(item)} disabled={aiLoadingMap[`ind-${item.id}`]} className="absolute bottom-6 right-8 text-indigo-600 bg-white p-1 rounded shadow-sm">{aiLoadingMap[`ind-${item.id}`] ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14}/>}</button></td>
+                    <td className="px-6 py-4 bg-slate-50/30 relative">
                        <div className="grid grid-cols-2 gap-4 h-full">
-                          <div className="flex flex-col h-full">
-                             <div className="flex items-center justify-between text-[9px] font-black text-indigo-600 uppercase mb-2">
-                                <div className="flex items-center gap-1.5"><BookText size={12}/> Informasi / Teks Bacaan</div>
-                                <button onClick={() => triggerImageAI(item)} disabled={aiLoadingMap[`img-${item.id}`]} className="p-1 hover:bg-white rounded transition-all text-indigo-400 hover:text-indigo-600">
-                                   {aiLoadingMap[`img-${item.id}`] ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12}/>}
-                                </button>
-                             </div>
-                             <div className="relative">
-                                <textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic leading-relaxed min-h-[160px]" value={item.stimulus} placeholder="Tuliskan narasi informasi atau data di sini..." onChange={e => updateKisiKisi(item.id, 'stimulus', e.target.value)} />
-                                {item.stimulusImage && <img src={item.stimulusImage} className="w-20 h-20 object-cover mt-2 rounded-lg border border-white shadow-md absolute bottom-2 right-2" alt="Preview"/>}
-                             </div>
-                             <div className="mt-2 overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner">{renderSoalContent(item.stimulus, item)}</div>
-                          </div>
-                          <div className="space-y-3 flex flex-col">
-                             <div><span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Butir Soal & Pilihan:</span><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] font-black min-h-[120px]" value={item.soal} onChange={e => updateKisiKisi(item.id, 'soal', e.target.value)} placeholder="Masukkan kalimat tanya dan daftar pilihan..." /></div>
-                             <div className="overflow-hidden max-h-40 overflow-y-auto border border-slate-100 p-1 bg-white rounded-lg shadow-inner mb-2">{renderSoalContent(item.soal, item)}</div>
-                             <div className="flex items-center gap-2 mt-auto"><span className="text-[9px] font-black uppercase text-slate-400">Kunci:</span><input className="flex-1 bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-black text-indigo-600" value={item.kunciJawaban} onChange={e => updateKisiKisi(item.id, 'kunciJawaban', e.target.value)} placeholder="Jawaban benar..." /></div>
-                          </div>
+                          <div className="flex flex-col"><div className="flex items-center justify-between text-[9px] font-black text-indigo-600 uppercase mb-2"><div className="flex items-center gap-1.5"><BookText size={12}/> Informasi / Teks</div><button onClick={() => triggerImageAI(item)} disabled={aiLoadingMap[`img-${item.id}`]} className="p-1">{aiLoadingMap[`img-${item.id}`] ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12}/>}</button></div><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-black italic min-h-[120px]" value={item.stimulus} onChange={e => updateKisiKisi(item.id, 'stimulus', e.target.value)} /></div>
+                          <div className="space-y-3 flex flex-col"><div><span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Soal & Opsi:</span><textarea className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] font-black min-h-[120px]" value={item.soal} onChange={e => updateKisiKisi(item.id, 'soal', e.target.value)} /></div><div className="flex items-center gap-2 mt-auto"><span className="text-[9px] font-black uppercase text-slate-400">Kunci:</span><input className="flex-1 bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-black text-indigo-600" value={item.kunciJawaban} onChange={e => updateKisiKisi(item.id, 'kunciJawaban', e.target.value)} /></div></div>
                        </div>
-                       <button onClick={() => generateSoalAI(item)} disabled={aiLoadingMap[`soal-${item.id}`]} className="absolute bottom-6 right-4 bg-rose-600 text-white p-2.5 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all z-10">
-                         {aiLoadingMap[`soal-${item.id}`] ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18}/>}
-                       </button>
+                       <button onClick={() => generateSoalAI(item)} disabled={aiLoadingMap[`soal-${item.id}`]} className="absolute bottom-6 right-4 bg-rose-600 text-white p-2.5 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all z-10">{aiLoadingMap[`soal-${item.id}`] ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18}/>}</button>
                     </td>
-                    <td className="px-6 py-4 text-center border-l border-slate-50 bg-slate-50/30"><input type="number" className="w-16 text-[12px] text-center font-black p-2 border rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-600" value={item.nomorSoal} onChange={e => updateKisiKisi(item.id, 'nomorSoal', parseInt(e.target.value) || 0)} /></td>
+                    <td className="px-6 py-4 text-center"><input type="number" className="w-16 text-[12px] text-center font-black p-2 border rounded-xl" value={item.nomorSoal} onChange={e => updateKisiKisi(item.id, 'nomorSoal', parseInt(e.target.value) || 0)} /></td>
                     <td className="px-6 py-4 text-center"><button onClick={() => deleteDoc(doc(db, "kisikisi", item.id))} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button></td>
                   </tr>
                 ))}
-                <tr>
-                  <td colSpan={8} className="p-6">
-                    <button 
-                      onClick={() => handleAddKisikisiRow()}
-                      className="w-full py-8 border-2 border-dashed border-slate-200 rounded-[2rem] text-xs font-black text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center gap-2 group"
-                    >
-                      <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
-                        <Plus size={24} className="text-indigo-600" />
-                      </div>
-                      <span className="uppercase tracking-[0.2em]">Tambah Baris Butir Soal Baru</span>
-                    </button>
-                  </td>
-                </tr>
+                <tr><td colSpan={8} className="p-6"><button onClick={() => handleAddKisikisiRow()} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-[2rem] text-xs font-black text-slate-400 hover:border-indigo-300 transition-all flex flex-col items-center justify-center gap-2"><Plus size={24}/><span className="uppercase">Tambah Baris Butir Soal Baru</span></button></td></tr>
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="p-10 bg-slate-50 min-h-[600px]">
-             <div className="max-w-4xl mx-auto">
-                <div className="grid grid-cols-2 gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-12">
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Hari / Tanggal Pelaksanaan</label><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" value={hariTanggal} onChange={e => setHariTanggal(e.target.value)} placeholder="Contoh: Senin, 12 Juni 2024" /></div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Alokasi Waktu</label><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" value={waktuPengerjaan} onChange={e => setWaktuPengerjaan(e.target.value)} placeholder="Contoh: 90 Menit" /></div>
-                </div>
-                <div className="space-y-1 bg-white p-1 rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                   <table className="w-full border-collapse">
-                      <thead><tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest h-10"><th className="w-16 px-4 text-center">No</th><th className="px-6 text-left">Naskah Soal & Bacaan</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredKisikisi.map((item) => (
-                           <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top">
-                              <td className="py-8 px-4 align-top text-center"><span className="inline-flex items-center justify-center w-10 h-10 bg-slate-100 text-slate-900 rounded-xl font-black text-lg shadow-sm border border-slate-200 group-hover:bg-rose-600 group-hover:text-white transition-all">{item.nomorSoal}</span></td>
-                              <td className="py-8 px-6 align-top break-words">
-                                 <div className="space-y-6">
-                                    {(item.stimulus || item.stimulusImage) && (
-                                      <div>
-                                         <p className="font-bold text-[11px] italic text-slate-600 mb-2">Cermatilah teks bacaan atau gambar berikut untuk menjawab soal nomor {item.nomorSoal}:</p>
-                                         <div className="p-8 bg-slate-50 rounded-[2rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden mb-6">
-                                            <div className="absolute top-0 right-0 p-4 opacity-5 text-indigo-600"><BookText size={64}/></div>
-                                            {item.stimulusImage && (
-                                               <div className="flex justify-center mb-8">
-                                                  <img src={item.stimulusImage} className="max-w-[400px] rounded-2xl border-4 border-white shadow-2xl" alt="Stimulus" />
-                                               </div>
-                                            )}
-                                            <div className="text-[10.5pt] leading-relaxed text-slate-800 italic font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>
-                                         </div>
-                                      </div>
-                                    )}
-                                    <div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div>
-                                 </div>
-                              </td>
-                           </tr>
-                        ))}
-                      </tbody>
-                   </table>
-                   {filteredKisikisi.length === 0 && <div className="py-40 text-center text-slate-400 italic uppercase font-black text-xs tracking-widest">Belum ada butir soal.</div>}
-                </div>
-             </div>
-          </div>
+          <div className="p-10 bg-slate-50 min-h-[600px]"><div className="max-w-4xl mx-auto"><div className="grid grid-cols-2 gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-12"><div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Hari / Tanggal Pelaksanaan</label><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" value={hariTanggal} onChange={e => setHariTanggal(e.target.value)} placeholder="Senin, 12 Juni 2024" /></div><div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Alokasi Waktu</label><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" value={waktuPengerjaan} onChange={e => setWaktuPengerjaan(e.target.value)} /></div></div><div className="space-y-1 bg-white p-1 rounded-2xl shadow-lg border border-slate-200 overflow-hidden"><table className="w-full border-collapse"><thead><tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest h-10"><th className="w-16 px-4 text-center">No</th><th className="px-6 text-left">Naskah Soal & Bacaan</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredKisikisi.map((item) => (<tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top"><td className="py-8 px-4 align-top text-center"><span className="inline-flex items-center justify-center w-10 h-10 bg-slate-100 text-slate-900 rounded-xl font-black text-lg shadow-sm border border-slate-200 group-hover:bg-rose-600 group-hover:text-white transition-all">{item.nomorSoal}</span></td><td className="py-8 px-6 align-top break-words"><div className="space-y-6">{(item.stimulus || item.stimulusImage) && (<div><p className="font-bold text-[11px] italic text-slate-600 mb-2">Cermatilah teks bacaan atau gambar berikut untuk menjawab soal nomor {item.nomorSoal}:</p><div className="p-8 bg-slate-50 rounded-[2rem] border-2 border-indigo-100 shadow-sm relative overflow-hidden mb-6"><div className="absolute top-0 right-0 p-4 opacity-5 text-indigo-600"><BookText size={64}/></div>{item.stimulusImage && (<div className="flex justify-center mb-8"><img src={item.stimulusImage} className="max-w-[400px] rounded-2xl border-4 border-white shadow-2xl" alt="Stimulus" /></div>)}<div className="text-[10.5pt] leading-relaxed text-slate-800 italic font-black">{renderSoalContent(item.stimulus, item, true, true)}</div></div></div>)}<div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div></div></td></tr>))}</tbody></table></div></div></div>
         )}
       </div>
     </div>

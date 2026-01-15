@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Sparkles as SparklesIcon, X as XIcon, Send as SendIcon, 
   User as UserIcon, Bot as BotIcon, Loader2 as LoaderIcon, 
   Maximize2 as MaxIcon, Minimize2 as MinIcon, AlertCircle as AlertIcon, 
-  RefreshCw as RetryIcon, Trash2 as ClearIcon, Key
+  RefreshCw as RetryIcon, Trash2 as ClearIcon, Key, AlertTriangle
 } from 'lucide-react';
 import { startAIChat } from '../services/geminiService';
 import { User as UserType } from '../types';
@@ -43,6 +44,16 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
+    // VALIDASI API KEY INDIVIDU
+    if (!user.apiKey) {
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        text: '⚠️ KONFIGURASI DIPERLUKAN: Anda belum memasukkan Gemini API Key di menu Manajemen User. AI tidak dapat merespon tanpa kunci aktif.', 
+        isError: true 
+      }]);
+      return;
+    }
+
     const userMessage = input;
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
@@ -51,7 +62,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
     try {
       if (!chatInstance.current) {
         chatInstance.current = await startAIChat(
-          `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`
+          `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`,
+          user.apiKey
         );
       }
       const result = await chatInstance.current.sendMessageStream({ message: userMessage });
@@ -82,7 +94,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
           <div className="p-2 bg-indigo-500 rounded-xl"><SparklesIcon size={18} /></div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest leading-none">Asisten AI</h3>
-            <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">System-wide AI Enabled</p>
+            <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">Personal Key Engine</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -93,6 +105,14 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
       </div>
       {!isMinimized && (
         <>
+          {!user.apiKey && (
+            <div className="bg-amber-50 p-4 border-b border-amber-100 flex items-start gap-3">
+              <AlertTriangle className="text-amber-600 shrink-0" size={18}/>
+              <p className="text-[10px] font-bold text-amber-800 leading-tight uppercase">
+                Peringatan: Anda belum mengatur API KEY. Silakan hubungi admin atau isi di Manajemen Profil untuk menggunakan AI.
+              </p>
+            </div>
+          )}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 no-scrollbar">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>

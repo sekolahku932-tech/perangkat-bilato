@@ -196,7 +196,8 @@ const App: React.FC = () => {
             {activeMenu === 'EFEKTIF' && <HariEfektifManager user={user} />}
             {activeMenu === 'PROTA' && <ProtaManager user={user} />}
             {activeMenu === 'PROMES' && <PromesManager user={user} />}
-            {activeMenu === 'RPM' && <RPMManager user={user} />}
+            {/* Fix: Passed setActiveMenu as onNavigate prop to satisfy RPMManager requirements */}
+            {activeMenu === 'RPM' && <RPMManager user={user} onNavigate={setActiveMenu} />}
             {activeMenu === 'LKPD' && <LKPDManager user={user} />}
             {activeMenu === 'JURNAL' && <JurnalManager user={user} />}
             {activeMenu === 'ASESMEN' && <AsesmenManager user={user} type="sumatif" />}

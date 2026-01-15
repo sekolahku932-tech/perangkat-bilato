@@ -228,31 +228,22 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
                 </div>
               </div>
 
-              {/* Input API Key Pribadi */}
-              <div className="bg-slate-900 p-6 rounded-[2rem] text-white space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                   <Key size={16} className="text-indigo-400"/>
-                   <span className="text-[10px] font-black uppercase tracking-widest">Gemini API Key</span>
-                </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 flex items-center gap-2">
+                  <Key size={10} className="text-indigo-600"/> Gemini API Key
+                </label>
                 <div className="relative">
                   <input 
-                    type={showApiKey ? "text" : "password"} 
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-4 pr-12 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-indigo-200" 
-                    value={formData.apiKey || ''} 
+                    type={showApiKey ? "text" : "password"}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-4 pr-12 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-600" 
+                    value={formData.apiKey} 
                     onChange={e => setFormData({...formData, apiKey: e.target.value})} 
                     placeholder="AIzaSy..." 
                   />
-                  <button 
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
-                  >
-                    {showApiKey ? <EyeOff size={16}/> : <Eye size={16}/>}
+                  <button onClick={() => setShowApiKey(!showApiKey)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className="text-[8px] text-slate-500 italic leading-relaxed">
-                  Gunakan API Key Anda untuk mengaktifkan fitur asisten AI di modul-modul kurikulum.
-                </p>
               </div>
 
               <div>
@@ -300,7 +291,6 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
                   <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest h-14">
                     <th className="px-8 py-2">Informasi Profil</th>
                     <th className="px-8 py-2">Tugas & Kelas</th>
-                    <th className="px-8 py-2">Status AI</th>
                     <th className="px-8 py-2 text-right">Aksi</th>
                   </tr>
                 </thead>
@@ -315,12 +305,6 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
                         <span className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase">
                           Kelas {u.kelas}
                         </span>
-                      </td>
-                      <td className="px-8 py-6">
-                        <div className={`flex items-center gap-1.5 font-black text-[9px] uppercase ${u.apiKey ? 'text-emerald-600' : 'text-rose-500'}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${u.apiKey ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-                          {u.apiKey ? 'Kunci Aktif' : 'Belum Ada Kunci'}
-                        </div>
                       </td>
                       <td className="px-8 py-6 text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

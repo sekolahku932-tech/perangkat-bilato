@@ -24,9 +24,12 @@ interface AsesmenRow {
 
 interface RPMManagerProps {
   user: User;
+  // Fix: Added missing onNavigate prop to fix the reference error in line 602
+  onNavigate: (menu: any) => void;
 }
 
-const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
+// Fix: Destructured onNavigate from props
+const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
   const [rpmList, setRpmList] = useState<RPMItem[]>([]);
   const [atpData, setAtpData] = useState<ATPItem[]>([]);
   const [cps, setCps] = useState<CapaianPembelajaran[]>([]);
@@ -374,7 +377,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
   };
 
   const handleGenerateAI = async (id: string) => {
-    // Fix: Using process.env.API_KEY directly from service, no need to check user.apiKey
+    // VALIDASI API KEY
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ PERINGATAN: API Key belum diatur di menu Manajemen User. AI tidak dapat bekerja.', type: 'warning' });
+      return;
+    }
+
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) { setMessage({ text: 'Pilih TP dulu!', type: 'warning' }); return; }
     setIsLoadingAI(true);
@@ -385,7 +393,8 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
         rpm.kelas, 
         rpm.praktikPedagogis || "Aktif", 
         rpm.alokasiWaktu, 
-        rpm.jumlahPertemuan || 1
+        rpm.jumlahPertemuan || 1,
+        user.apiKey
       );
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { ...result }); 
@@ -399,12 +408,15 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
   };
 
   const handleGenerateAsesmenAI = async (id: string) => {
-    // Fix: Using process.env.API_KEY directly from service
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ API Key diperlukan untuk fitur ini!', type: 'warning' });
+      return;
+    }
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) { setMessage({ text: 'Isi TP dulu!', type: 'warning' }); return; }
     setIsLoadingAsesmenAI(true);
     try {
-      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas);
+      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, user.apiKey);
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { asesmenTeknik: result }); 
         setMessage({ text: 'Instrumen & Rubrik Berhasil Disusun!', type: 'success' }); 
@@ -418,14 +430,17 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
   };
 
   const handleRecommendPedagogy = async (id: string) => {
-    // Fix: Using process.env.API_KEY directly from service
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ Atur API Key Anda terlebih dahulu!', type: 'warning' });
+      return;
+    }
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.atpId) return;
     const atp = atpData.find(a => a.id === rpm.atpId);
     if (!atp) return;
     setIsLoadingPedagogyAI(true);
     try {
-      const result = await recommendPedagogy(rpm.tujuanPembelajaran, atp.alurTujuanPembelajaran, rpm.materi, rpm.kelas);
+      const result = await recommendPedagogy(rpm.tujuanPembelajaran, atp.alurTujuanPembelajaran, rpm.materi, rpm.kelas, user.apiKey);
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { praktikPedagogis: result.modelName }); 
         setMessage({ text: `AI: ${result.modelName}.`, type: 'info' }); 
@@ -581,6 +596,17 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user }) => {
         message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
         'bg-red-50 border-red-200 text-red-800'
       }`}><CheckCircle2 size={20}/><span className="text-sm font-black uppercase tracking-tight">{message.text}</span></div>)}
+      
+      {!user.apiKey && (
+        <div className="bg-rose-50 border-2 border-rose-200 p-6 rounded-[2rem] flex items-start gap-4 animate-pulse">
+          <AlertCircle className="text-rose-600 shrink-0" size={24}/>
+          <div>
+            <h3 className="text-sm font-black text-rose-800 uppercase tracking-tight">Konfigurasi AI Diperlukan</h3>
+            <p className="text-xs text-rose-700 font-medium mt-1">Anda belum memasukkan Gemini API Key di profil. Fitur "Uraikan dengan AI" tidak akan berfungsi. Silakan lengkapi di menu <button onClick={() => onNavigate('USER')} className="underline font-black">Manajemen User</button>.</p>
+          </div>
+        </div>
+      )}
+
       {deleteConfirmId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95"><div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus RPM</h3><p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris RPM ini?</p></div><div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-lg">HAPUS</button></div></div></div>)}
 
       {isEditing && (

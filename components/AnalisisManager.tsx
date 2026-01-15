@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, CapaianPembelajaran, AnalisisCP, MATA_PELAJARAN, SchoolSettings, User } from '../types';
-import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen, CheckCircle2 } from 'lucide-react';
+// Fix: Added missing 'Key' to lucide-react imports to resolve the error on line 183
+import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen, CheckCircle2, Key } from 'lucide-react';
 import { analyzeCPToTP } from '../services/geminiService';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
@@ -103,10 +104,9 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
   }, [cps]);
 
   const handleAnalyze = async (cp: CapaianPembelajaran) => {
-    // Validasi API Key
+    // CEK API KEY INDIVIDU
     if (!user.apiKey) {
-      setMessage({ text: 'Akses AI Ditolak: Anda belum melengkapi API Key pribadi di Manajemen User.', type: 'warning' });
-      setTimeout(() => setMessage(null), 5000);
+      setMessage({ text: '⚠️ Gagal: API Key belum diisi di profil Anda!', type: 'warning' });
       return;
     }
 
@@ -134,7 +134,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
       }
     } catch (error: any) {
       console.error(error);
-      setMessage({ text: 'Gagal analisis AI. Periksa koneksi atau kuota API.', type: 'error' });
+      setMessage({ text: 'AI Error: Pastikan API Key valid dan kuota masih ada.', type: 'error' });
     } finally {
       setIsAnalyzing(false);
     }
@@ -176,6 +176,16 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
         }`}>
           {message.type === 'success' ? <CheckCircle2 size={20}/> : <AlertCircle size={20}/>}
           <span className="text-sm font-black uppercase tracking-tight">{message.text}</span>
+        </div>
+      )}
+
+      {!user.apiKey && (
+        <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[2.5rem] flex items-center gap-5 shadow-sm">
+           <div className="p-3 bg-white rounded-2xl text-amber-600 shadow-sm"><Key size={24}/></div>
+           <div>
+              <h3 className="font-black text-amber-800 uppercase text-sm tracking-tight leading-none">Fitur AI Belum Siap</h3>
+              <p className="text-xs text-amber-700 font-bold mt-1">Anda belum memasukkan personal Gemini API Key. Silakan lengkapi di Manajemen User agar AI dapat menganalisis CP secara otomatis.</p>
+           </div>
         </div>
       )}
 
@@ -227,7 +237,15 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
                   <h4 className="text-[10px] font-black text-slate-800 uppercase text-right leading-tight">{cp.elemen}</h4>
                 </div>
                 <p className="text-[11px] leading-relaxed text-slate-600 line-clamp-4 italic">"{cp.deskripsi}"</p>
-                <button onClick={() => handleAnalyze(cp)} disabled={isAnalyzing} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-[10px] uppercase disabled:opacity-50 tracking-widest">
+                <button 
+                  onClick={() => handleAnalyze(cp)} 
+                  disabled={isAnalyzing || !user.apiKey} 
+                  className={`w-full font-black py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest ${
+                    !user.apiKey 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
                   {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} ANALISIS DENGAN AI
                 </button>
               </div>

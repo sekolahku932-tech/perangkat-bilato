@@ -29,7 +29,7 @@ export interface User {
   kelas: string;
   school: string;
   mapelDiampu: string[];
-  apiKey?: string; // Menampung API Key pribadi guru
+  apiKey?: string; // Menambahkan kembali properti API Key
 }
 
 export interface Siswa {

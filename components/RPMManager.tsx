@@ -195,8 +195,8 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     if (cleanMeetingTags) processedText = text.replace(/Pertemuan\s*\d+\s*:?\s*/gi, '');
     
     const cleaningRegex = /^(\d+[\.\)]|\-|\*|•)\s*/;
-    // Regex lebih agresif untuk membuang baris judul yang mungkin mengandung teks appersepsi atau nama model
-    const redundantHeaderRegex = /^(\d+[\.\)])?\s*(I\.|II\.|III\.|I\s|II\s|III\s)?\s*(MEMAHAMI|MENGAPLIKASI|MEREFLEKSI|Sintaks|SINTAKS|MODEL|Langkah-langkah|Butir-butir|Rincian)\s*(\(.*\))?:?\s*$/i;
+    // Regex agresif untuk membuang judul bagian redundan dan sintaks model di awal
+    const redundantHeaderRegex = /^(\d+[\.\)])?\s*(I\.|II\.|III\.|I\s|II\s|III\s)?\s*(MEMAHAMI|MENGAPLIKASI|MEREFLEKSI|Sintaks|SINTAKS|MODEL|Langkah-langkah|Rincian|Kegiatan)\s*(\(.*\))?:?\s*$/i;
 
     let rawLines = processedText.split(/\n+/);
     let validLines: string[] = [];
@@ -205,13 +205,13 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         const trimmed = line.trim();
         if (!trimmed) return;
         
-        // Buang baris yang hanya berisi judul bagian redundan
+        // Buang baris jika itu hanya pengulangan judul bagian
         if (redundantHeaderRegex.test(trimmed)) return;
 
         const innerSplits = trimmed.split(/\s+(?=\d+[\.\)])/g);
         innerSplits.forEach(part => {
             const cleaned = part.trim().replace(cleaningRegex, '').trim();
-            // Validasi ulang agar tidak ada baris judul yang lolos setelah pembersihan nomor
+            // Validasi ulang setelah dibersihkan nomor urutnya
             if (cleaned.length > 0 && !redundantHeaderRegex.test(cleaned)) {
                validLines.push(cleaned);
             }
@@ -228,7 +228,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
               {i + 1}
             </span>
             <div className="flex-1 pt-2">
-              <span className="leading-relaxed text-justify text-slate-700 text-[14px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
+              <span className="leading-relaxed text-justify text-slate-700 text-[14.5px] block font-medium" dangerouslySetInnerHTML={{ __html: processFilosofiTags(cleanedStep) }}></span>
             </div>
           </li>
         ))}
@@ -632,7 +632,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                <div className="flex gap-2"><button onClick={() => setIsPrintMode(true)} className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-2xl text-[10px] font-black flex items-center gap-2 transition-all"><Printer size={14}/> PRATINJAU</button><button onClick={() => setIsEditing(null)} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 rounded-2xl text-[10px] font-black transition-all">TUTUP</button></div>
             </div>
             <div className="p-8 overflow-y-auto space-y-10 no-scrollbar bg-slate-50/50">
-              {isLoadingAI && (<div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[200] flex flex-col items-center justify-center gap-6 animate-in fade-in"><div className="relative"><div className="w-24 h-24 border-4 border-cyan-100 border-t-cyan-600 rounded-full animate-spin"></div><Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-600 animate-pulse" size={32} /></div><div className="text-center"><h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">AI Berjalan (Naratif Mode)</h3><p className="text-slate-500 font-medium max-w-xs leading-relaxed italic text-sm uppercase">Menjabarkan langkah pembelajaran secara mendalam dan ritual pembuka...</p></div></div>)}
+              {isLoadingAI && (<div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[200] flex flex-col items-center justify-center gap-6 animate-in fade-in"><div className="relative"><div className="w-24 h-24 border-4 border-cyan-100 border-t-cyan-600 rounded-full animate-spin"></div><Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-600 animate-pulse" size={32} /></div><div className="text-center"><h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">AI Berjalan (Naratif Mode)</h3><p className="text-slate-500 font-medium max-w-xs leading-relaxed italic text-sm uppercase">Menjabarkan rincian aktivitas guru & siswa yang panjang dan sinkron...</p></div></div>)}
               {currentRpm ? (
                 <>
                   <div className="space-y-6 bg-white p-8 rounded-[3rem] border border-slate-200">
@@ -655,31 +655,31 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                   </div>
 
                   <div className="space-y-8 bg-white p-10 rounded-[4rem] border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-2"><div className="w-1.5 h-6 bg-cyan-600 rounded-full"></div><h4 className="font-black text-slate-800 uppercase text-xs tracking-widest">2. Alur Deep Learning (Sequence Vertikal)</h4></div><button onClick={() => handleGenerateAI(isEditing!)} disabled={isLoadingAI} className="flex items-center gap-3 bg-cyan-600 text-white px-10 py-4 rounded-[2rem] text-xs font-black shadow-xl hover:bg-cyan-700 transition-all active:scale-95 disabled:opacity-50">{isLoadingAI ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16}/>} URAIKAN SINTAKS DENGAN AI</button></div>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-2"><div className="w-1.5 h-6 bg-cyan-600 rounded-full"></div><h4 className="font-black text-slate-800 uppercase text-xs tracking-widest">2. Alur Deep Learning (Sequence Vertikal)</h4></div><button onClick={() => handleGenerateAI(isEditing!)} disabled={isLoadingAI} className="flex items-center gap-3 bg-cyan-600 text-white px-10 py-4 rounded-[2rem] text-xs font-black shadow-xl hover:bg-cyan-700 transition-all active:scale-95 disabled:opacity-50">{isLoadingAI ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16}/>} URAIKAN NARASI DENGAN AI</button></div>
                     
                     <div className="space-y-12">
                       <div className="space-y-4">
                         <div className="flex items-center gap-4 text-blue-900 mb-6 bg-blue-50/50 p-4 rounded-2xl border-l-[10px] border-blue-600">
                            <Brain size={28}/>
-                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">I. MEMAHAMI (APPERSEPSI & MOTIVASI)</h5><p className="text-[10px] font-bold opacity-60">Wajib diawali dengan doa, absensi, dan penyampaian TP secara naratif.</p></div>
+                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">I. MEMAHAMI (APPERSEPSI & RITUAL)</h5><p className="text-[10px] font-bold opacity-60">Uraian ritual doa, absensi, dan penyampaian TP secara naratif panjang.</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[180px] focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanAwal || ''} placeholder="Contoh narasi ritual pembuka..." onChange={e => updateRPM(isEditing!, 'kegiatanAwal', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[180px] focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanAwal || ''} placeholder="Contoh: Pertemuan 1: Guru mengawali dengan doa bersama..." onChange={e => updateRPM(isEditing!, 'kegiatanAwal', e.target.value)} />
                       </div>
 
                       <div className="space-y-4">
                         <div className="flex items-center gap-4 text-emerald-900 mb-6 bg-emerald-50/50 p-4 rounded-2xl border-l-[10px] border-emerald-600">
                            <Zap size={28}/>
-                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">II. MENGAPLIKASI (INTI / SINTAKS MODEL)</h5><p className="text-[10px] font-bold opacity-60">Narasi terperinci aktivitas per sintaks model {currentRpm?.praktikPedagogis}.</p></div>
+                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">II. MENGAPLIKASI (INTI / SINTAKS MODEL)</h5><p className="text-[10px] font-bold opacity-60">Narasi terperinci fase-fase model {currentRpm?.praktikPedagogis} per butir ke bawah.</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[350px] focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanInti || ''} placeholder="Uraikan detail aktivitas per sintaks secara panjang di sini..." onChange={e => updateRPM(isEditing!, 'kegiatanInti', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[350px] focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanInti || ''} placeholder="Uraikan rincian aktivitas per sintaks secara panjang dan mendalam di sini..." onChange={e => updateRPM(isEditing!, 'kegiatanInti', e.target.value)} />
                       </div>
 
                       <div className="space-y-4">
                         <div className="flex items-center gap-4 text-rose-900 mb-6 bg-rose-50/50 p-4 rounded-2xl border-l-[10px] border-rose-600">
                            <RefreshCw size={28}/>
-                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">III. MEREFLEKSI (KESIMPULAN & SELEBRASI)</h5><p className="text-[10px] font-bold opacity-60">Langkah refleksi untuk menemukan makna belajar yang mendalam.</p></div>
+                           <div><h5 className="font-black uppercase text-sm tracking-[0.3em]">III. MEREFLEKSI (KESIMPULAN & SELEBRASI)</h5><p className="text-[10px] font-bold opacity-60">Langkah refleksi untuk menemukan makna belajar yang mendalam secara deskriptif.</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[180px] focus:ring-4 focus:ring-rose-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanPenutup || ''} placeholder="Langkah refleksi naratif..." onChange={e => updateRPM(isEditing!, 'kegiatanPenutup', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[180px] focus:ring-4 focus:ring-rose-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanPenutup || ''} placeholder="Langkah refleksi dan penguatan bermakna..." onChange={e => updateRPM(isEditing!, 'kegiatanPenutup', e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -697,9 +697,9 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                            {renderAsesmenTable(parseAsesmen(currentRpm?.asesmenTeknik || "")!)}
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4 text-center">
                            <FileText size={48} className="opacity-20"/>
-                           <p className="text-xs font-black uppercase tracking-widest italic opacity-50 text-center">AI akan menyusun asesmen yang selaras dengan narasi langkah di atas</p>
+                           <p className="text-xs font-black uppercase tracking-widest italic opacity-50">AI akan menyusun asesmen yang selaras dengan narasi langkah panjang di atas</p>
                         </div>
                       )}
                     </div>

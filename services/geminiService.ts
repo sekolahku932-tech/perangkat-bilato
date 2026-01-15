@@ -133,22 +133,18 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
   MATERI: "${materi}"
   MODEL: ${praktikPedagogis}
   
-  INSTRUKSI KHUSUS MULTI-PERTEMUAN (WAJIB):
-  1. Karena RPM ini untuk ${jumlahPertemuan} pertemuan, Anda WAJIB memisahkan konten di dalam SETIAP kolom (kegiatanAwal, kegiatanInti, kegiatanPenutup) menggunakan label "Pertemuan 1:", "Pertemuan 2:", dst.
-  2. JABARKAN aktivitas dalam rincian butir-butir bernomor (1., 2., 3., dst) dengan kalimat yang PANJANG, NARATIF, dan DESKRIPTIF.
-  3. JANGAN menuliskan kembali judul bagian ("I. MEMAHAMI", dsb) di dalam teks.
-  4. Bagian Awal (kegiatanAwal) SETIAP PERTEMUAN WAJIB berisi rincian: Doa Bersama [Berkesadaran], Absensi & Cek Emosional [Berkesadaran], serta Penyampaian TP & Relevansi Materi [Bermakna].
-  5. Bagian Inti (kegiatanInti) harus menjabarkan fase model "${praktikPedagogis}" secara mendalam untuk tiap pertemuan.
-  6. Bagian Penutup (kegiatanPenutup) harus berisi refleksi mendalam dan selebrasi [Menggembirakan] untuk tiap pertemuan.
+  INSTRUKSI KHUSUS LANGKAH PEMBELAJARAN (WAJIB):
+  1. Sajikan langkah pembelajaran dalam rincian butir-butir bernomor (1., 2., 3., dst) yang berurut ke bawah secara vertikal.
+  2. SETIAP SATU BUTIR langkah harus berupa kalimat naratif yang PANJANG dan DESKRIPTIF (min 20 kata).
+  3. DI AKHIR SETIAP KALIMAT langkah, Anda WAJIB menyertakan salah satu label filosofi berikut: [Bermakna], [Menggembirakan], atau [Berkesadaran] (Pilih yang paling sesuai dengan aktivitasnya).
+  4. Gunakan label "Pertemuan 1:", "Pertemuan 2:", dst untuk memisahkan sesi jika jumlahPertemuan > 1 di dalam kolom teks.
+  5. JANGAN menuliskan kembali judul bagian (seperti "I. MEMAHAMI") di dalam teks isi.
   
-  CONTOH FORMAT DALAM SETIAP KOLOM:
+  CONTOH FORMAT HASIL:
   Pertemuan 1:
-  1. (Narasi aktivitas panjang...)
-  2. (Narasi aktivitas panjang...)
-  
-  Pertemuan 2:
-  1. (Narasi aktivitas panjang...)
-  2. (Narasi aktivitas panjang...)`;
+  1. Guru mengajak siswa mengamati lingkungan sekitar sekolah untuk menemukan contoh nyata dari materi yang sedang dipelajari agar siswa memahami relevansinya dalam kehidupan sehari-hari. [Bermakna]
+  2. Siswa secara berkelompok melakukan simulasi peran dengan antusiasme tinggi melalui permainan edukatif yang dirancang khusus untuk memperdalam pemahaman konsep secara seru. [Menggembirakan]
+  3. Guru memberikan waktu hening sejenak bagi siswa untuk merefleksikan apa yang telah mereka rasakan dan pelajari hari ini guna menumbuhkan ketenangan batin. [Berkesadaran]`;
 
   const response = await ai.models.generateContent({
     model: COMPLEX_MODEL,
@@ -160,9 +156,9 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" },
-          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" },
-          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan 1:, Pertemuan 2: dst jika jumlah > 1" }
+          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
+          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
+          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" }
         }
       }
     },

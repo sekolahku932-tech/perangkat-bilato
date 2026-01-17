@@ -6,7 +6,7 @@ import {
   Loader2, Cloud, CheckCircle2, AlertTriangle, UserPlus, 
   Search, ListChecks, Download, Edit2, X, Lock, Info, Printer, Eye, EyeOff
 } from 'lucide-react';
-import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from '../services/firebase';
+import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, setDoc } from '../services/firebase';
 
 interface EvaluasiManagerProps {
   user: User;
@@ -28,7 +28,7 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   
   const [settings, setSettings] = useState<SchoolSettings>({
-    schoolName: 'SD NEGERI 5 BILATO',
+    schoolName: user.school,
     address: 'Kecamatan Bilato, Kabupaten Gorontalo',
     principalName: 'Nama Kepala Sekolah',
     principalNip: '-'
@@ -55,7 +55,7 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    const unsubSettings = onSnapshot(doc(db, "settings", "school_info"), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
 
@@ -64,21 +64,21 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    const unsubSiswa = onSnapshot(collection(db, "siswa"), (snap) => {
+    const unsubSiswa = onSnapshot(query(collection(db, "siswa"), where("school", "==", user.school)), (snap) => {
       setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Siswa[]);
     });
 
-    const unsubAtp = onSnapshot(collection(db, "atp"), (snap) => {
+    const unsubAtp = onSnapshot(query(collection(db, "atp"), where("school", "==", user.school)), (snap) => {
       setTps(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ATPItem[]);
     });
 
-    const unsubNilai = onSnapshot(collection(db, "nilai"), (snap) => {
+    const unsubNilai = onSnapshot(query(collection(db, "nilai"), where("school", "==", user.school)), (snap) => {
       setScores(snap.docs.map(d => ({ id: d.id, ...d.data() })) as AsesmenNilai[]);
       setLoading(false);
     });
 
     return () => { unsubSettings(); unsubYears(); unsubSiswa(); unsubAtp(); unsubNilai(); };
-  }, []);
+  }, [user.school]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => s.kelas === kelas).sort((a, b) => a.name.localeCompare(b.name));
@@ -94,7 +94,8 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
       await addDoc(collection(db, "siswa"), {
         name: newStudent.name.toUpperCase(),
         nis: newStudent.nis || '-',
-        kelas: kelas
+        kelas: kelas,
+        school: user.school
       });
       setNewStudent({ name: '', nis: '' });
       setMessage({ text: 'Siswa berhasil ditambahkan', type: 'success' });
@@ -115,7 +116,8 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
           tpId,
           nilai,
           mapel,
-          semester
+          semester,
+          school: user.school
         });
       }
     } catch (e) { console.error(e); }
@@ -136,7 +138,7 @@ const EvaluasiManager: React.FC<EvaluasiManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak Daftar Nilai - SDN 5 Bilato</title>
+            <title>Cetak Daftar Nilai - ${settings.schoolName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>

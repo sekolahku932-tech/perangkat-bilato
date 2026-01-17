@@ -8,7 +8,7 @@ import {
   Tag, Clock, Layout, GraduationCap, Loader2, Cloud, RefreshCw, 
   AlertTriangle, X, CheckCircle2, Lock, Wand2 
 } from 'lucide-react';
-import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from '../services/firebase';
+import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, setDoc } from '../services/firebase';
 
 const BULAN_SEM_1 = ['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const BULAN_SEM_2 = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'];
@@ -48,7 +48,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [settings, setSettings] = useState<SchoolSettings>({
-    schoolName: 'SD NEGERI 5 BILATO',
+    schoolName: user.school,
     address: 'Kecamatan Bilato, Kabupaten Gorontalo',
     principalName: 'Nama Kepala Sekolah',
     principalNip: '-'
@@ -71,7 +71,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    const unsubSettings = onSnapshot(doc(db, "settings", "school_info"), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
     const unsubYears = onSnapshot(collection(db, "academic_years"), (snap) => {
@@ -79,21 +79,21 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
     
-    const unsubEfektif = onSnapshot(collection(db, "hari_efektif"), (snapshot) => {
+    const unsubEfektif = onSnapshot(query(collection(db, "hari_efektif"), where("school", "==", user.school)), (snapshot) => {
       setData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as HariEfektif[]);
     });
 
-    const unsubEvents = onSnapshot(collection(db, "kalender_events"), (snapshot) => {
+    const unsubEvents = onSnapshot(query(collection(db, "kalender_events"), where("school", "==", user.school)), (snapshot) => {
       setEvents(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as EventKalender[]);
     });
 
-    const unsubJadwal = onSnapshot(collection(db, "jadwal_pelajaran"), (snapshot) => {
+    const unsubJadwal = onSnapshot(query(collection(db, "jadwal_pelajaran"), where("school", "==", user.school)), (snapshot) => {
       setJadwal(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as JadwalItem[]);
       setLoading(false);
     });
 
     return () => { unsubSettings(); unsubYears(); unsubEfektif(); unsubEvents(); unsubJadwal(); };
-  }, []);
+  }, [user.school]);
 
   useEffect(() => {
     const count = jadwal.filter(j => j.kelas === selectedKelas && j.mapel === mapel).length;
@@ -104,10 +104,9 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
     const bulanList = semester === 1 ? BULAN_SEM_1 : BULAN_SEM_2;
     return bulanList.map(bulan => {
       const found = data.find(d => d.kelas === selectedKelas && d.semester === semester && d.bulan === bulan);
-      // Fix: Added missing 'id' property and matched property name 'mingguTidakEfektif' after typo fix in types.ts
-      return found || { id: '', kelas: selectedKelas, semester, bulan, jumlahMinggu: 4, mingguTidakEfektif: 0, keterangan: '' } as HariEfektif;
+      return found || { id: '', kelas: selectedKelas, semester, bulan, jumlahMinggu: 4, mingguTidakEfektif: 0, keterangan: '', school: user.school } as HariEfektif;
     });
-  }, [data, selectedKelas, semester]);
+  }, [data, selectedKelas, semester, user.school]);
 
   const totalMinggu = filteredData.reduce((acc, curr) => acc + (curr.jumlahMinggu || 0), 0);
   const totalTidakEfektif = filteredData.reduce((acc, curr) => acc + (curr.mingguTidakEfektif || 0), 0);
@@ -121,9 +120,8 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
         await updateDoc(doc(db, "hari_efektif", existing.id), { [field]: value });
       } else {
         await addDoc(collection(db, "hari_efektif"), {
-          kelas: selectedKelas, semester, bulan, 
+          kelas: selectedKelas, semester, bulan, school: user.school,
           jumlahMinggu: field === 'jumlahMinggu' ? value : 4,
-          // Fix: Property name comparison now valid after typo fix in types.ts
           mingguTidakEfektif: field === 'mingguTidakEfektif' ? value : 0,
           keterangan: field === 'keterangan' ? value : ''
         });
@@ -171,7 +169,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
 
         const existing = data.find(d => d.kelas === selectedKelas && d.semester === semester && d.bulan === bulan);
         const payload = {
-          kelas: selectedKelas, semester, bulan,
+          kelas: selectedKelas, semester, bulan, school: user.school,
           jumlahMinggu: mondayCount || 4,
           mingguTidakEfektif: nonEffectiveWeeks,
           keterangan: uniqueKeterangan || ''
@@ -194,7 +192,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
   const handleAddEvent = async () => {
     if (!newEvent.title || !newEvent.date) return;
     try {
-      await addDoc(collection(db, "kalender_events"), newEvent);
+      await addDoc(collection(db, "kalender_events"), { ...newEvent, school: user.school });
       setNewEvent({ type: 'libur', title: '', date: '' });
       setNotification({ text: 'Event berhasil ditambahkan', type: 'success' });
     } catch (e) { console.error(e); }
@@ -217,7 +215,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
           await updateDoc(doc(db, "jadwal_pelajaran", existing.id), { mapel: newMapel });
         } else {
           await addDoc(collection(db, "jadwal_pelajaran"), {
-            kelas: selectedKelas, hari, jamKe, mapel: newMapel
+            kelas: selectedKelas, hari, jamKe, mapel: newMapel, school: user.school
           });
         }
       }
@@ -231,7 +229,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak Perangkat - SDN 5 Bilato</title>
+            <title>Cetak Perangkat - ${settings.schoolName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>

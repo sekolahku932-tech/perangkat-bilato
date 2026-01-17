@@ -25,7 +25,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [settings, setSettings] = useState<SchoolSettings>({
-    schoolName: 'SD NEGERI 5 BILATO',
+    schoolName: user.school,
     address: 'Kecamatan Bilato, Kabupaten Gorontalo',
     principalName: 'Nama Kepala Sekolah',
     principalNip: '-'
@@ -60,7 +60,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    const unsubSettings = onSnapshot(doc(db, "settings", "school_info"), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
 
@@ -83,7 +83,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
     });
 
     return () => { unsubSettings(); unsubYears(); unsubscribeProta(); unsubscribeAtp(); unsubscribeCp(); };
-  }, []);
+  }, [user.school]);
 
   const filteredProta = useMemo(() => {
     const currentMapelNormalized = filterMapel.trim().toLowerCase();
@@ -111,7 +111,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak PROTA - SDN 5 Bilato</title>
+            <title>Cetak PROTA - ${settings.schoolName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>
@@ -151,7 +151,8 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       await addDoc(collection(db, "prota"), {
         fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
         tujuanPembelajaran: '', materiPokok: '', subMateri: '', jp: '', semester: '1',
-        indexOrder: currentMaxOrder + 1
+        indexOrder: currentMaxOrder + 1,
+        school: user.school
       });
     } catch (e) { console.error(e); }
   };
@@ -197,7 +198,8 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
             fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
             tujuanPembelajaran: a.tujuanPembelajaran, materiPokok: a.materi, subMateri: a.subMateri, jp: a.alokasiWaktu, 
             semester: '1', 
-            indexOrder: a.indexOrder || 0 
+            indexOrder: a.indexOrder || 0,
+            school: user.school
           });
           count++;
         }
@@ -214,13 +216,13 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       <div className="bg-white p-8 md:p-12 min-h-screen text-slate-900 font-serif">
         <div className="no-print fixed top-6 right-6 flex gap-3 z-[200]">
           <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-black transition-all">
-            <EyeOff size={16}/> KEMBALI
+            <EyeOff size={16} /> KEMBALI
           </button>
           <button onClick={handleExportWord} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-blue-700 transition-all">
-            <FileDown size={16}/> WORD
+            <FileDown size={16} /> WORD
           </button>
           <button onClick={handlePrint} className="bg-rose-600 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-rose-700 transition-all">
-            <Printer size={16}/> CETAK PDF
+            <Printer size={16} /> CETAK PDF
           </button>
         </div>
         
@@ -332,7 +334,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] shadow-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-[40px] shadow-xl border border-slate-200 overflow-hidden min-h-[500px]">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>

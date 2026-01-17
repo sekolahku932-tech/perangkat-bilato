@@ -33,7 +33,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [settings, setSettings] = useState<SchoolSettings>({
-    schoolName: 'SD NEGERI 5 BILATO',
+    schoolName: user.school,
     address: 'Kecamatan Bilato, Kabupaten Gorontalo',
     principalName: 'Nama Kepala Sekolah',
     principalNip: '-'
@@ -66,7 +66,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
 
   useEffect(() => {
     setLoading(true);
-    const unsubSettings = onSnapshot(doc(db, "settings", "school_info"), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, "school_settings", user.school), (snap) => {
       if (snap.exists()) setSettings(snap.data() as SchoolSettings);
     });
     const unsubYears = onSnapshot(collection(db, "academic_years"), (snap) => {
@@ -95,7 +95,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
     return () => {
       unsubSettings(); unsubYears(); unsubPromes(); unsubProta(); unsubAtp(); unsubCps(); unsubJadwal(); unsubEvents();
     };
-  }, []);
+  }, [user.school]);
 
   const sortedPromes = useMemo(() => {
     const rawFiltered = promesData.filter(item => 
@@ -132,7 +132,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Cetak PROMES - SDN 5 Bilato</title>
+            <title>Cetak PROMES - ${settings.schoolName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
               body { font-family: 'Times New Roman', serif; background: white; padding: 10px; font-size: 8pt; }
@@ -226,14 +226,15 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
       materiPokok: type === 'ASESMEN' ? 'ASESMEN SUMATIF' : '', subMateri: '',
       tujuanPembelajaran: type === 'ASESMEN' ? 'Evaluasi pencapaian kompetensi' : '',
       alokasiWaktu: type === 'ASESMEN' ? '2' : '4', bulanPelaksanaan: '', jadwalMingguan: {}, keterangan: '', isAsesmen: type === 'ASESMEN',
-      indexOrder: currentMaxOrder + 1
+      indexOrder: currentMaxOrder + 1,
+      school: user.school
     });
   };
 
   const importFromProta = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, "prota"), where("fase", "==", filterFase), where("kelas", "==", filterKelas), where("semester", "==", filterSemester), where("mataPelajaran", "==", filterMapel));
+      const q = query(collection(db, "prota"), where("fase", "==", filterFase), where("kelas", "==", filterKelas), where("semester", "==", filterSemester), where("mataPelajaran", "==", filterMapel), where("school", "==", user.school));
       const snap = await getDocs(q);
       if (snap.empty) {
         setMessage({ text: 'Data PROTA tidak ditemukan untuk filter ini!', type: 'error' });
@@ -248,7 +249,8 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
             fase: filterFase, kelas: filterKelas, semester: filterSemester, mataPelajaran: filterMapel,
             materiPokok: p.materiPokok, subMateri: p.subMateri, tujuanPembelajaran: p.tujuanPembelajaran,
             alokasiWaktu: p.jp, bulanPelaksanaan: '', jadwalMingguan: {}, keterangan: '', isAsesmen: false,
-            indexOrder: p.indexOrder || 0 
+            indexOrder: p.indexOrder || 0,
+            school: user.school
           });
           count++;
         }
@@ -409,7 +411,6 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div className="flex flex-wrap gap-2">
             <button onClick={() => handleAddRow('TP')} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-indigo-700 transition-all"><Plus size={16} /> TP BARU</button>
-            {/* FIX: Fixed truncated line and corrected type argument */}
             <button onClick={() => handleAddRow('ASESMEN')} className="bg-amber-500 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-amber-600 transition-all"><AlertCircle size={16} /> ASESMEN BARU</button>
             <button onClick={importFromProta} disabled={loading} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-xl transition-all disabled:opacity-50">{loading ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />} AMBIL DARI PROTA</button>
           </div>

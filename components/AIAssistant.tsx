@@ -62,7 +62,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
     try {
       if (!chatInstance.current) {
         chatInstance.current = await startAIChat(
-          `Anda asisten AI SDN 5 Bilato. Guru: ${user.name}.`,
+          `Anda asisten AI ${user.school}. Guru: ${user.name}.`,
           user.apiKey
         );
       }

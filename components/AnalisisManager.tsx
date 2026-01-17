@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, CapaianPembelajaran, AnalisisCP, MATA_PELAJARAN, SchoolSettings, User } from '../types';
-// Fix: Added missing 'Key' to lucide-react imports to resolve the error on line 183
-import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen, CheckCircle2, Key } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Loader2, Eye, EyeOff, BrainCircuit, Cloud, AlertTriangle, X, FileDown, Printer, Lock, AlertCircle, ListChecks, Info, BookOpen, CheckCircle2, Key, ArrowLeft } from 'lucide-react';
 import { analyzeCPToTP } from '../services/geminiService';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
@@ -104,7 +103,6 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
   }, [cps]);
 
   const handleAnalyze = async (cp: CapaianPembelajaran) => {
-    // CEK API KEY INDIVIDU
     if (!user.apiKey) {
       setMessage({ text: '⚠️ Gagal: API Key belum diisi di profil Anda!', type: 'warning' });
       return;
@@ -151,10 +149,10 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>
-              body { font-family: 'Inter', sans-serif; background: white; padding: 40px; }
+              body { font-family: 'Inter', sans-serif; background: white; padding: 40px; font-size: 10pt; }
               @media print { .no-print { display: none !important; } body { padding: 0; } }
-              table { border-collapse: collapse; }
-              .break-inside-avoid { page-break-inside: avoid; }
+              table { border-collapse: collapse; width: 100%; border: 1.5px solid black; }
+              th, td { border: 1px solid black; padding: 8px; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">
@@ -165,6 +163,66 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
       printWindow.document.close();
     }
   };
+
+  if (isPrintMode) {
+    return (
+      <div className="bg-white p-8 md:p-12 min-h-screen text-slate-900 font-serif">
+        <div className="no-print fixed top-6 right-6 flex gap-3 z-[200]">
+          <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-black transition-all">
+            <ArrowLeft size={16} /> KEMBALI
+          </button>
+          <button onClick={handlePrint} className="bg-rose-600 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-rose-700 transition-all">
+            <Printer size={16} /> CETAK PDF
+          </button>
+        </div>
+
+        <div ref={printRef}>
+          <div className="text-center mb-10">
+            <h1 className="text-xl font-black uppercase border-b-4 border-black pb-2 inline-block">Analisis CP Menjadi TP</h1>
+            <h2 className="text-lg font-bold mt-3 uppercase">{settings.schoolName}</h2>
+            <div className="flex justify-center gap-10 mt-6 text-[9px] font-black uppercase font-sans text-slate-500 tracking-widest">
+              <span>MAPEL: {filterMapel}</span> <span>KELAS: {filterKelas}</span> <span>TAHUN: {activeYear}</span>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse border-2 border-black text-[10px]">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="border-2 border-black px-2 py-3 w-10 text-center">NO</th>
+                <th className="border-2 border-black px-3 py-3 text-left w-64">CAPAIAN PEMBELAJARAN (CP)</th>
+                <th className="border-2 border-black px-3 py-3 text-left w-48">MATERI POKOK</th>
+                <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN (TP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAnalisis.map((item, idx) => {
+                const cpData = cps.find(c => c.id === item.cpId);
+                return (
+                  <tr key={item.id} className="break-inside-avoid">
+                    <td className="border-2 border-black p-3 text-center font-bold">{idx + 1}</td>
+                    <td className="border-2 border-black p-3 text-justify leading-relaxed italic text-slate-600">
+                      <span className="font-black text-slate-900 not-italic block mb-1">[{cpData?.kode || '-'}] {cpData?.elemen || '-'}</span>
+                      "{cpData?.deskripsi || '-'}"
+                    </td>
+                    <td className="border-2 border-black p-3 font-black uppercase">{item.materi}</td>
+                    <td className="border-2 border-black p-3 leading-relaxed font-medium">{item.tujuanPembelajaran}</td>
+                  </tr>
+                );
+              })}
+              {filteredAnalisis.length === 0 && (
+                <tr><td colSpan={4} className="p-10 text-center italic text-slate-400">Data analisis kosong untuk filter ini.</td></tr>
+              )}
+            </tbody>
+          </table>
+
+          <div className="mt-16 flex justify-between items-start text-[10px] px-12 font-sans uppercase font-black tracking-tighter">
+            <div className="text-center w-72"><p>Mengetahui,</p> <p>Kepala Sekolah</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p> <p className="no-underline mt-1 font-normal">NIP. {settings.principalNip}</p></div>
+            <div className="text-center w-72"><p>Bilato, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p> <p>Guru Kelas/Mapel</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{user?.name || '[Nama Guru]'}</p> <p className="no-underline mt-1 font-normal">NIP. {user?.nip || '...................'}</p></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

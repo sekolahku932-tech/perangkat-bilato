@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User } from '../types';
-import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle, ArrowLeft } from 'lucide-react';
 import { completeATPDetails } from '../services/geminiService';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
@@ -197,14 +197,14 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>ATP - ${user.school}</title>
+            <title>Cetak ATP - ${user.school}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
             <style>
-              body { font-family: 'Inter', sans-serif; background: white; padding: 40px; }
+              body { font-family: 'Inter', sans-serif; background: white; padding: 20px; font-size: 8pt; }
               @media print { .no-print { display: none !important; } body { padding: 0; } }
-              table { border-collapse: collapse; }
-              .break-inside-avoid { page-break-inside: avoid; }
+              table { border-collapse: collapse; width: 100%; border: 1px solid black; }
+              th, td { border: 1px solid black; padding: 4px; }
             </style>
           </head>
           <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">
@@ -218,6 +218,76 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
   const isClassLocked = user.role === 'guru' && user.teacherType === 'kelas';
   const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || []);
+
+  if (isPrintMode) {
+    return (
+      <div className="bg-white p-8 md:p-12 min-h-screen text-slate-900 font-serif">
+        <div className="no-print fixed top-6 right-6 flex gap-3 z-[200]">
+          <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-black transition-all">
+            <ArrowLeft size={16} /> KEMBALI
+          </button>
+          <button onClick={handlePrint} className="bg-rose-600 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-rose-700 transition-all">
+            <Printer size={16} /> CETAK PDF
+          </button>
+        </div>
+
+        <div ref={printRef}>
+          <div className="text-center mb-10">
+            <h1 className="text-xl font-black uppercase border-b-4 border-black pb-2 inline-block">Alur Tujuan Pembelajaran (ATP)</h1>
+            <h2 className="text-lg font-bold mt-3 uppercase">{settings.schoolName}</h2>
+            <div className="flex justify-center gap-10 mt-6 text-[9px] font-black uppercase font-sans text-slate-500 tracking-widest">
+              <span>MAPEL: {filterMapel}</span> <span>FASE/KELAS: {filterFase} / {filterKelas}</span> <span>TAHUN: {activeYear}</span>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse border-2 border-black text-[8px]">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="border-2 border-black p-2 w-8">NO</th>
+                <th className="border-2 border-black p-2 w-32">ELEMEN / CP</th>
+                <th className="border-2 border-black p-2 w-48">TUJUAN PEMBELAJARAN (TP)</th>
+                <th className="border-2 border-black p-2 w-56">ALUR TUJUAN PEMBELAJARAN (ATP)</th>
+                <th className="border-2 border-black p-2 w-16">MATERI / AW</th>
+                <th className="border-2 border-black p-2 w-32">PROFIL LULUSAN</th>
+                <th className="border-2 border-black p-2">RENCANA ASESMEN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAtp.map((item, idx) => (
+                <tr key={item.id} className="break-inside-avoid align-top">
+                  <td className="border-2 border-black p-2 text-center font-bold">{idx + 1}</td>
+                  <td className="border-2 border-black p-2 leading-tight">
+                    <span className="font-black block uppercase mb-1">{item.elemen}</span>
+                    <span className="italic text-slate-600 line-clamp-6">{item.capaianPembelajaran}</span>
+                  </td>
+                  <td className="border-2 border-black p-2 font-bold leading-tight">{item.tujuanPembelajaran}</td>
+                  <td className="border-2 border-black p-2 leading-tight italic">{item.alurTujuanPembelajaran}</td>
+                  <td className="border-2 border-black p-2 text-center">
+                    <span className="block font-black uppercase mb-1">{item.materi}</span>
+                    <span className="bg-slate-100 px-2 py-0.5 rounded font-bold border border-slate-300">{item.alokasiWaktu} JP</span>
+                  </td>
+                  <td className="border-2 border-black p-2 leading-tight text-[7px] font-medium">{item.dimensiProfilLulusan}</td>
+                  <td className="border-2 border-black p-2 leading-tight">
+                    <p><b>Awal:</b> {item.asesmenAwal}</p>
+                    <p><b>Proses:</b> {item.asesmenProses}</p>
+                    <p><b>Akhir:</b> {item.asesmenAkhir}</p>
+                  </td>
+                </tr>
+              ))}
+              {filteredAtp.length === 0 && (
+                <tr><td colSpan={7} className="p-10 text-center italic">Belum ada data ATP.</td></tr>
+              )}
+            </tbody>
+          </table>
+
+          <div className="mt-16 flex justify-between items-start text-[10px] px-12 font-sans uppercase font-black tracking-tighter">
+            <div className="text-center w-72"><p>Mengetahui,</p> <p>Kepala Sekolah</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p> <p className="no-underline mt-1 font-normal">NIP. {settings.principalNip}</p></div>
+            <div className="text-center w-72"><p>Bilato, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p> <p>Guru Kelas/Mapel</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{user?.name || '[Nama Guru]'}</p> <p className="no-underline mt-1 font-normal">NIP. {user?.nip || '...................'}</p></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">

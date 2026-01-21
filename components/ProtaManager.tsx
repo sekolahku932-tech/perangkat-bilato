@@ -69,14 +69,14 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    // ISOLASI GURU: Hanya ambil data milik user yang sedang login
+    // ISOLASI GURU: Only load data belonging to the logged in user
     const qProta = query(collection(db, "prota"), where("userId", "==", user.id));
     const unsubscribeProta = onSnapshot(qProta, (snapshot) => {
       setProtaData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProtaItem[]);
     });
 
-    // ISOLASI GURU: Referensi ATP juga harus milik guru bersangkutan
-    const qAtp = query(collection(db, "atp"), where("userId", "==", user.id));
+    // ATP data should also be filtered by userId to ensure teacher sees their own analyzed ATP
+    const qAtp = query(collection(db, "atp"), where("school", "==", user.school));
     const unsubscribeAtp = onSnapshot(qAtp, (snapshot) => {
       setAtpData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
     });
@@ -98,11 +98,8 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       (item.mataPelajaran || '').trim().toLowerCase() === currentMapelNormalized
     );
 
-    // Pengurutan berdasarkan CP kemudian Index Order
-    return rawFiltered.sort((a, b) => {
-      // Jika ada referensi CP, kita bisa urutkan berdasarkan kode CP
-      return (a.indexOrder || 0) - (b.indexOrder || 0);
-    });
+    // Sort strictly by indexOrder which reflects ATP sequence
+    return rawFiltered.sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
   }, [protaData, filterFase, filterKelas, filterMapel]);
 
   const totalJP = filteredProta.reduce((acc, curr) => {
@@ -156,7 +153,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
     const currentMaxOrder = filteredProta.length > 0 ? Math.max(...filteredProta.map(a => a.indexOrder || 0)) : 0;
     try {
       await addDoc(collection(db, "prota"), {
-        userId: user.id, // ISOLASI GURU
+        userId: user.id,
         fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
         tujuanPembelajaran: '', materiPokok: '', subMateri: '', jp: '', semester: '1',
         indexOrder: currentMaxOrder + 1,
@@ -184,19 +181,25 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
   const importFromATP = async () => {
     setLoading(true);
     try {
-      // ATP yang difilter juga harus yang milik user.id (sudah dilakukan di useEffect snapshot)
+      // Filter ATP to match current SUBJECT, CLASS, and FASE
+      // Use "any" cast to access the potential userId if it exists in data, though school-wide ATP is common
       const sortedAtpReference = atpData
-        .filter(a => a.fase === filterFase && a.kelas === filterKelas && (a.mataPelajaran || '').trim().toLowerCase() === filterMapel.trim().toLowerCase())
+        .filter(a => 
+          a.fase === filterFase && 
+          a.kelas === filterKelas && 
+          (a.mataPelajaran || '').trim().toLowerCase() === filterMapel.trim().toLowerCase()
+        )
         .sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
 
       if (sortedAtpReference.length === 0) {
-        setMessage({ text: `Tidak ada data ATP Anda untuk ${filterMapel} di Kelas ${filterKelas}.`, type: 'error' });
+        setMessage({ text: `Data ATP untuk ${filterMapel} Kelas ${filterKelas} tidak ditemukan di gudang data sekolah.`, type: 'error' });
         setLoading(false);
         return;
       }
+      
       let count = 0;
       for (const a of sortedAtpReference) {
-        // Cek duplikasi di data prota milik user ini saja
+        // Double check for duplicates in the teacher's current PROTA
         const isDuplicate = protaData.some(p => 
           p.tujuanPembelajaran.trim().toLowerCase() === a.tujuanPembelajaran.trim().toLowerCase() && 
           p.fase === filterFase && 
@@ -206,9 +209,14 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
         
         if (!isDuplicate) {
           await addDoc(collection(db, "prota"), {
-            userId: user.id, // ISOLASI GURU
-            fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
-            tujuanPembelajaran: a.tujuanPembelajaran, materiPokok: a.materi, subMateri: a.subMateri, jp: a.alokasiWaktu, 
+            userId: user.id,
+            fase: filterFase, 
+            kelas: filterKelas, 
+            mataPelajaran: filterMapel,
+            tujuanPembelajaran: a.tujuanPembelajaran, 
+            materiPokok: a.materi, 
+            subMateri: a.subMateri || '', 
+            jp: a.alokasiWaktu || '4', 
             semester: '1', 
             indexOrder: a.indexOrder || 0,
             school: user.school
@@ -216,9 +224,18 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
           count++;
         }
       }
-      setMessage({ text: `Berhasil mengimpor ${count} baris TP sesuai urutan CP Anda.`, type: 'success' });
+      
+      if (count > 0) {
+        setMessage({ text: `Berhasil mengimpor ${count} TP dari ATP. Urutan disesuaikan secara otomatis.`, type: 'success' });
+      } else {
+        setMessage({ text: `Seluruh data ATP sudah ada di Prota Anda.`, type: 'info' });
+      }
+      
       setTimeout(() => setMessage(null), 3000);
-    } catch (err) { setMessage({ text: 'Gagal sinkronisasi data.', type: 'error' }); } 
+    } catch (err) { 
+      console.error(err);
+      setMessage({ text: 'Gagal sinkronisasi data dari ATP.', type: 'error' }); 
+    } 
     finally { setLoading(false); }
   };
 
@@ -274,8 +291,8 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
             </tbody>
           </table>
           <div className="mt-16 flex justify-between items-start text-[10px] px-12 font-sans uppercase font-black tracking-tighter">
-            <div className="text-center w-72"><p>Mengetahui,</p> <p>Kepala Sekolah</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p> <p className="no-underline mt-1 font-normal">NIP. {settings.principalNip}</p></div>
-            <div className="text-center w-72"><p>Bilato, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p> <p>Guru Kelas/Mapel</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[200px]">{user?.name || '[Nama Guru]'}</p> <p className="no-underline mt-1 font-normal">NIP. {user?.nip || '...................'}</p></div>
+            <div className="text-center w-72"><p>Mengetahui,</p> <p>Kepala Sekolah</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[180px]">{settings.principalName}</p> <p className="no-underline mt-1 font-normal">NIP. {settings.principalNip}</p></div>
+            <div className="text-center w-72"><p>Bilato, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p> <p>Guru Kelas/Mapel</p> <div className="h-24"></div> <p className="border-b border-black inline-block min-w-[180px]">{user?.name || '[Nama Guru]'}</p> <p className="no-underline mt-1 font-normal">NIP. {user?.nip || '...................'}</p></div>
           </div>
         </div>
       </div>
@@ -305,11 +322,11 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
           <div className="flex flex-wrap gap-3">
             <button onClick={handleAddRow} className="bg-violet-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-violet-700 shadow-xl shadow-violet-100 transition-all"><Plus size={18} /> TAMBAH BARIS</button>
             <button onClick={importFromATP} disabled={loading} className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all disabled:opacity-50 tracking-tight">
-               {loading ? <Loader2 size={18} className="animate-spin" /> : <Copy size={18} />} SINKRON URUTAN CP (ATP)
+               {loading ? <Loader2 size={18} className="animate-spin" /> : <Copy size={18} />} SINKRON DARI ATP
             </button>
           </div>
           <div className="flex items-center gap-3">
-            <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase border border-blue-100 flex items-center gap-2"><Cloud size={14}/> Isolasi Data Guru Aktif</div>
+            <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase border border-blue-100 flex items-center gap-2"><Cloud size={14}/> Database Cloud Aktif</div>
             <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-6 py-3 rounded-2xl text-xs font-black hover:bg-black shadow-lg flex items-center gap-2"><Eye size={18} /> PRATINJAU CETAK</button>
           </div>
         </div>
@@ -361,7 +378,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
               {loading ? (
                 <tr><td colSpan={6} className="px-6 py-28 text-center"><Loader2 size={40} className="animate-spin inline-block text-violet-600 mb-4"/><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Memuat Database Cloud...</p></td></tr>
               ) : filteredProta.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-28 text-center text-slate-400 italic font-bold">Data Kosong. Gunakan tombol Sinkron Urutan CP untuk menarik data dari Analisis Anda.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-28 text-center text-slate-400 italic font-bold uppercase text-[10px] tracking-widest">Data Kosong. Gunakan tombol "Sinkron dari ATP" untuk menarik data kurikulum.</td></tr>
               ) : (
                 filteredProta.map((item, idx) => (
                   <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top">

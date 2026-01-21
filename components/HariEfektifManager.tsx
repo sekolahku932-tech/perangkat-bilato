@@ -6,7 +6,7 @@ import {
   CalendarDays, Save, Printer, Eye, EyeOff, Info, Calculator, FileText, 
   ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, 
   Tag, Clock, Layout, GraduationCap, Loader2, Cloud, RefreshCw, 
-  AlertTriangle, X, CheckCircle2, Lock, Wand2 
+  AlertTriangle, X, CheckCircle2, Lock, Wand2, Edit2 
 } from 'lucide-react';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, setDoc } from '../services/firebase';
 
@@ -41,6 +41,8 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<EventKalender[]>([]);
   const [newEvent, setNewEvent] = useState<Partial<EventKalender>>({ type: 'libur', title: '', date: '' });
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  
   const [jadwal, setJadwal] = useState<JadwalItem[]>([]);
   const [data, setData] = useState<HariEfektif[]>([]);
   const [activeYear, setActiveYear] = useState('..../....');
@@ -189,19 +191,41 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
     }
   };
 
-  const handleAddEvent = async () => {
+  const handleSaveEvent = async () => {
     if (!newEvent.title || !newEvent.date) return;
     try {
-      await addDoc(collection(db, "kalender_events"), { ...newEvent, school: user.school });
+      if (editingEventId) {
+        await updateDoc(doc(db, "kalender_events", editingEventId), { ...newEvent });
+        setNotification({ text: 'Event berhasil diperbarui', type: 'success' });
+        setEditingEventId(null);
+      } else {
+        await addDoc(collection(db, "kalender_events"), { ...newEvent, school: user.school });
+        setNotification({ text: 'Event berhasil ditambahkan', type: 'success' });
+      }
       setNewEvent({ type: 'libur', title: '', date: '' });
-      setNotification({ text: 'Event berhasil ditambahkan', type: 'success' });
     } catch (e) { console.error(e); }
+  };
+
+  const handleStartEditEvent = (event: EventKalender) => {
+    setNewEvent({
+      title: event.title,
+      date: event.date,
+      type: event.type
+    });
+    setEditingEventId(event.id);
+    // Scroll view to date if needed or just let user see form
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEventId(null);
+    setNewEvent({ type: 'libur', title: '', date: '' });
   };
 
   const handleDeleteEvent = async (id: string) => {
     try {
       await deleteDoc(doc(db, "kalender_events", id));
       setNotification({ text: 'Event dihapus', type: 'info' });
+      if (editingEventId === id) handleCancelEdit();
     } catch (e) { console.error(e); }
   };
 
@@ -313,8 +337,13 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
                 e.type === 'kegiatan' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
                 'bg-blue-100 text-blue-700 border-blue-200'
               }`}>
-                <span>{e.title}</span>
-                {!isPrint && <button onClick={() => handleDeleteEvent(e.id)} className="opacity-0 group-hover:opacity-100"><X size={8}/></button>}
+                <span className="truncate flex-1">{e.title}</span>
+                {!isPrint && (
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 bg-white/20 rounded ml-1 px-0.5 shrink-0">
+                    <button onClick={() => handleStartEditEvent(e)} title="Edit Event"><Edit2 size={8}/></button>
+                    <button onClick={() => handleDeleteEvent(e.id)} title="Hapus Event"><X size={8}/></button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -325,19 +354,26 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
     return (
       <div className={`bg-white rounded-[32px] overflow-hidden ${isPrint ? 'border-2 border-black' : 'shadow-xl border border-slate-200'}`}>
         {!isPrint && (
-          <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+          <div className={`p-6 ${editingEventId ? 'bg-amber-600' : 'bg-slate-900'} text-white flex justify-between items-center transition-colors`}>
             <div className="flex items-center gap-4">
               <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 hover:bg-white/10 rounded-xl"><ChevronLeft size={20}/></button>
               <h3 className="text-sm font-black uppercase tracking-widest">{new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(currentDate)}</h3>
               <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 hover:bg-white/10 rounded-xl"><ChevronRight size={20}/></button>
             </div>
             <div className="flex gap-2">
-              <input type="date" className="bg-slate-800 text-white text-[10px] rounded-xl border-none w-32" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
-              <input type="text" placeholder="Agenda..." className="bg-slate-800 text-white text-[10px] px-4 py-2 rounded-xl border-none w-48" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
-              <select className="bg-slate-800 text-white text-[10px] rounded-xl border-none" value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}>
+              <input type="date" className="bg-slate-800 text-white text-[10px] rounded-xl border-none w-32 outline-none focus:ring-2 focus:ring-blue-500" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
+              <input type="text" placeholder="Agenda..." className="bg-slate-800 text-white text-[10px] px-4 py-2 rounded-xl border-none w-48 outline-none focus:ring-2 focus:ring-blue-500" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
+              <select className="bg-slate-800 text-white text-[10px] rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-500 px-2" value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}>
                 <option value="libur">Libur</option><option value="ujian">Ujian</option><option value="kegiatan">Kegiatan</option><option value="penting">Penting</option>
               </select>
-              <button onClick={handleAddEvent} className="bg-blue-600 px-6 py-2 rounded-xl text-[10px] font-black shadow-lg">TAMBAH</button>
+              {editingEventId ? (
+                <div className="flex gap-1">
+                  <button onClick={handleSaveEvent} className="bg-emerald-600 px-6 py-2 rounded-xl text-[10px] font-black shadow-lg hover:bg-emerald-700 flex items-center gap-1"><Save size={12}/> SIMPAN</button>
+                  <button onClick={handleCancelEdit} className="bg-slate-700 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-slate-600">BATAL</button>
+                </div>
+              ) : (
+                <button onClick={handleSaveEvent} className="bg-blue-600 px-6 py-2 rounded-xl text-[10px] font-black shadow-lg hover:bg-blue-700 flex items-center gap-1"><Plus size={12}/> TAMBAH</button>
+              )}
             </div>
           </div>
         )}
@@ -352,6 +388,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-600 rounded-sm"></div><span className="font-black text-slate-500 uppercase">Libur</span></div>
            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-100 border border-amber-200 rounded-sm"></div><span className="font-black text-slate-500 uppercase">Ujian</span></div>
            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-100 border border-emerald-200 rounded-sm"></div><span className="font-black text-slate-500 uppercase">Kegiatan</span></div>
+           <div className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-100 border border-blue-200 rounded-sm"></div><span className="font-black text-slate-500 uppercase">Penting</span></div>
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ProtaItem, MATA_PELAJARAN, ATPItem, CapaianPembelajaran, SchoolSettings, User } from '../types';
-import { Plus, Trash2, Save, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, Cloud, Loader2, AlertTriangle, FileDown, Printer, Lock } from 'lucide-react';
+import { Plus, Trash2, Save, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, Cloud, Loader2, AlertTriangle, FileDown, Printer, Lock, BookOpen } from 'lucide-react';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from '../services/firebase';
 
 interface ProtaManagerProps {
@@ -69,21 +69,26 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    const unsubscribeProta = onSnapshot(collection(db, "prota"), (snapshot) => {
+    // ISOLASI GURU: Hanya ambil data milik user yang sedang login
+    const qProta = query(collection(db, "prota"), where("userId", "==", user.id));
+    const unsubscribeProta = onSnapshot(qProta, (snapshot) => {
       setProtaData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProtaItem[]);
     });
 
-    const unsubscribeAtp = onSnapshot(collection(db, "atp"), (snapshot) => {
+    // ISOLASI GURU: Referensi ATP juga harus milik guru bersangkutan
+    const qAtp = query(collection(db, "atp"), where("userId", "==", user.id));
+    const unsubscribeAtp = onSnapshot(qAtp, (snapshot) => {
       setAtpData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
     });
 
-    const unsubscribeCp = onSnapshot(collection(db, "cps"), (snapshot) => {
+    const qCp = query(collection(db, "cps"), where("school", "==", user.school));
+    const unsubscribeCp = onSnapshot(qCp, (snapshot) => {
       setCps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
       setLoading(false);
     });
 
     return () => { unsubSettings(); unsubYears(); unsubscribeProta(); unsubscribeAtp(); unsubscribeCp(); };
-  }, [user.school]);
+  }, [user.school, user.id]);
 
   const filteredProta = useMemo(() => {
     const currentMapelNormalized = filterMapel.trim().toLowerCase();
@@ -93,10 +98,12 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       (item.mataPelajaran || '').trim().toLowerCase() === currentMapelNormalized
     );
 
-    return rawFiltered.sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
+    // Pengurutan berdasarkan CP kemudian Index Order
+    return rawFiltered.sort((a, b) => {
+      // Jika ada referensi CP, kita bisa urutkan berdasarkan kode CP
+      return (a.indexOrder || 0) - (b.indexOrder || 0);
+    });
   }, [protaData, filterFase, filterKelas, filterMapel]);
-
-  const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : user.mapelDiampu;
 
   const totalJP = filteredProta.reduce((acc, curr) => {
     if (!curr.jp) return acc;
@@ -120,7 +127,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
                 .no-print { display: none !important; }
                 body { padding: 0; }
               }
-              table { border-collapse: collapse; width: 100%; border: 2px solid black; }
+              table { border-collapse: collapse; width: 100%; border: 1.5px solid black; }
               th, td { border: 1px solid black; padding: 5px; }
             </style>
           </head>
@@ -149,6 +156,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
     const currentMaxOrder = filteredProta.length > 0 ? Math.max(...filteredProta.map(a => a.indexOrder || 0)) : 0;
     try {
       await addDoc(collection(db, "prota"), {
+        userId: user.id, // ISOLASI GURU
         fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
         tujuanPembelajaran: '', materiPokok: '', subMateri: '', jp: '', semester: '1',
         indexOrder: currentMaxOrder + 1,
@@ -168,24 +176,27 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
     try {
       await deleteDoc(doc(db, "prota", deleteConfirmId));
       setDeleteConfirmId(null);
-      setMessage({ text: 'Data dihapus dari cloud', type: 'info' });
+      setMessage({ text: 'Data dihapus dari database Anda', type: 'info' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (e) { setMessage({ text: 'Gagal menghapus data', type: 'error' }); }
   };
 
   const importFromATP = async () => {
     setLoading(true);
     try {
+      // ATP yang difilter juga harus yang milik user.id (sudah dilakukan di useEffect snapshot)
       const sortedAtpReference = atpData
         .filter(a => a.fase === filterFase && a.kelas === filterKelas && (a.mataPelajaran || '').trim().toLowerCase() === filterMapel.trim().toLowerCase())
         .sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
 
       if (sortedAtpReference.length === 0) {
-        setMessage({ text: `Tidak ada data ATP untuk ${filterMapel} di Kelas ${filterKelas}.`, type: 'error' });
+        setMessage({ text: `Tidak ada data ATP Anda untuk ${filterMapel} di Kelas ${filterKelas}.`, type: 'error' });
         setLoading(false);
         return;
       }
       let count = 0;
       for (const a of sortedAtpReference) {
+        // Cek duplikasi di data prota milik user ini saja
         const isDuplicate = protaData.some(p => 
           p.tujuanPembelajaran.trim().toLowerCase() === a.tujuanPembelajaran.trim().toLowerCase() && 
           p.fase === filterFase && 
@@ -195,6 +206,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
         
         if (!isDuplicate) {
           await addDoc(collection(db, "prota"), {
+            userId: user.id, // ISOLASI GURU
             fase: filterFase, kelas: filterKelas, mataPelajaran: filterMapel,
             tujuanPembelajaran: a.tujuanPembelajaran, materiPokok: a.materi, subMateri: a.subMateri, jp: a.alokasiWaktu, 
             semester: '1', 
@@ -204,7 +216,8 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
           count++;
         }
       }
-      setMessage({ text: `Berhasil mengimpor ${count} baris dari Alur CP.`, type: 'success' });
+      setMessage({ text: `Berhasil mengimpor ${count} baris TP sesuai urutan CP Anda.`, type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err) { setMessage({ text: 'Gagal sinkronisasi data.', type: 'error' }); } 
     finally { setLoading(false); }
   };
@@ -226,11 +239,6 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
           </button>
         </div>
         
-        <div className="no-print bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-8 text-[10px] font-bold text-amber-800 flex items-center gap-3">
-          <AlertCircle size={16}/> 
-          Jika dialog cetak tidak terbuka, pastikan pop-up di browser Anda tidak terblokir.
-        </div>
-
         <div ref={printRef}>
           <div className="text-center mb-10">
             <h1 className="text-xl font-black uppercase border-b-4 border-black pb-2 inline-block">Program Tahunan (PROTA)</h1>
@@ -244,7 +252,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
               <tr className="bg-slate-50">
                 <th className="border-2 border-black px-2 py-3 w-10">NO</th>
                 <th className="border-2 border-black px-2 py-3 w-20">SEM</th>
-                <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN</th>
+                <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN (TP)</th>
                 <th className="border-2 border-black px-3 py-3 w-40 text-left">MATERI POKOK</th>
                 <th className="border-2 border-black px-2 py-3 w-16 text-center">JP</th>
               </tr>
@@ -286,7 +294,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
-            <div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus Prota</h3><p className="text-slate-500 font-medium text-sm">Hapus baris ini dari cloud?</p></div>
+            <div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus Prota</h3><p className="text-slate-500 font-medium text-sm">Hapus baris ini dari database Anda?</p></div>
             <div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition-all">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 transition-all shadow-lg">HAPUS</button></div>
           </div>
         </div>
@@ -296,10 +304,12 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
           <div className="flex flex-wrap gap-3">
             <button onClick={handleAddRow} className="bg-violet-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-violet-700 shadow-xl shadow-violet-100 transition-all"><Plus size={18} /> TAMBAH BARIS</button>
-            <button onClick={importFromATP} disabled={loading} className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all disabled:opacity-50">{loading ? <Loader2 size={18} className="animate-spin" /> : <Copy size={18} />} AMBIL DARI ANALISIS</button>
+            <button onClick={importFromATP} disabled={loading} className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all disabled:opacity-50 tracking-tight">
+               {loading ? <Loader2 size={18} className="animate-spin" /> : <Copy size={18} />} SINKRON URUTAN CP (ATP)
+            </button>
           </div>
           <div className="flex items-center gap-3">
-            <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase border border-blue-100 flex items-center gap-2"><Cloud size={14}/> Sinkron Linear Aktif</div>
+            <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase border border-blue-100 flex items-center gap-2"><Cloud size={14}/> Isolasi Data Guru Aktif</div>
             <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-6 py-3 rounded-2xl text-xs font-black hover:bg-black shadow-lg flex items-center gap-2"><Eye size={18} /> PRATINJAU CETAK</button>
           </div>
         </div>
@@ -330,7 +340,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
               {['1','2','3','4','5','6'].map(k => <option key={k} value={k}>Kelas {k}</option>)}
             </select>
           </div>
-          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+          <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label><select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>{(user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || [])).map(m => <option key={m} value={m}>{m}</option>)}</select></div>
         </div>
       </div>
 
@@ -351,7 +361,7 @@ const ProtaManager: React.FC<ProtaManagerProps> = ({ user }) => {
               {loading ? (
                 <tr><td colSpan={6} className="px-6 py-28 text-center"><Loader2 size={40} className="animate-spin inline-block text-violet-600 mb-4"/><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Memuat Database Cloud...</p></td></tr>
               ) : filteredProta.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-28 text-center text-slate-400 italic font-bold">Data Kosong. Gunakan tombol Ambil dari Analisis untuk sinkronisasi linear.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-28 text-center text-slate-400 italic font-bold">Data Kosong. Gunakan tombol Sinkron Urutan CP untuk menarik data dari Analisis Anda.</td></tr>
               ) : (
                 filteredProta.map((item, idx) => (
                   <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top">

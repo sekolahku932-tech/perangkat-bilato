@@ -74,13 +74,14 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
       setCps(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
     });
 
-    const qAnalisis = query(collection(db, "analisis"), where("school", "==", user.school));
+    // ISOLASI: Filter berdasarkan userId
+    const qAnalisis = query(collection(db, "analisis"), where("userId", "==", user.id));
     const unsubAnalisis = onSnapshot(qAnalisis, snap => {
       setAnalisis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AnalisisCP[]);
       setLoading(false);
     });
     return () => { unsubSettings(); unsubYears(); unsubCp(); unsubAnalisis(); };
-  }, [user.school]);
+  }, [user.school, user.id]);
 
   const filteredAnalisis = useMemo(() => {
     const currentMapelNormalized = (filterMapel || '').trim().toLowerCase();
@@ -116,6 +117,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
         for (const res of results) {
           lastOrder++;
           await addDoc(collection(db, "analisis"), {
+            userId: user.id, // ISOLASI
             cpId: cp.id,
             fase: filterFase,
             kelas: filterKelas,

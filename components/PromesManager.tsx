@@ -73,29 +73,40 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
       const active = snap.docs.find((d: any) => d.data().isActive);
       if (active) setActiveYear(active.data().year);
     });
-    const unsubPromes = onSnapshot(collection(db, "promes"), (snapshot) => {
+
+    // ISOLASI: Filter berdasarkan userId
+    const qPromes = query(collection(db, "promes"), where("userId", "==", user.id));
+    const unsubPromes = onSnapshot(qPromes, (snapshot) => {
       setPromesData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as ExtendedPromesItem[]);
     });
-    const unsubProta = onSnapshot(collection(db, "prota"), (snapshot) => {
+
+    const qProta = query(collection(db, "prota"), where("userId", "==", user.id));
+    const unsubProta = onSnapshot(qProta, (snapshot) => {
       setProtaData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as ProtaItem[]);
     });
-    const unsubAtp = onSnapshot(collection(db, "atp"), (snapshot) => {
+
+    const qAtp = query(collection(db, "atp"), where("userId", "==", user.id));
+    const unsubAtp = onSnapshot(qAtp, (snapshot) => {
       setAtpData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
     });
-    const unsubCps = onSnapshot(collection(db, "cps"), (snapshot) => {
+
+    const unsubCps = onSnapshot(query(collection(db, "cps"), where("school", "==", user.school)), (snapshot) => {
       setCps(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
     });
-    const unsubJadwal = onSnapshot(collection(db, "jadwal_pelajaran"), (snapshot) => {
+
+    const unsubJadwal = onSnapshot(query(collection(db, "jadwal_pelajaran"), where("school", "==", user.school)), (snapshot) => {
       setJadwal(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as JadwalItem[]);
     });
-    const unsubEvents = onSnapshot(collection(db, "kalender_events"), (snapshot) => {
+
+    const unsubEvents = onSnapshot(query(collection(db, "kalender_events"), where("school", "==", user.school)), (snapshot) => {
       setEvents(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as EventKalender[]);
       setLoading(false);
     });
+
     return () => {
       unsubSettings(); unsubYears(); unsubPromes(); unsubProta(); unsubAtp(); unsubCps(); unsubJadwal(); unsubEvents();
     };
-  }, [user.school]);
+  }, [user.school, user.id]);
 
   const sortedPromes = useMemo(() => {
     const rawFiltered = promesData.filter(item => 
@@ -119,7 +130,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
   }, [jadwal, filterKelas, filterMapel]);
 
   const teachingDays = Object.keys(dailyScheduleInfo);
-  const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : user.mapelDiampu;
+  const availableMapel = user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || []);
 
   const BULAN_LIST = filterSemester === '1' 
     ? ['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -222,6 +233,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
   const handleAddRow = async (type: 'TP' | 'ASESMEN') => {
     const currentMaxOrder = sortedPromes.length > 0 ? Math.max(...sortedPromes.map(a => a.indexOrder || 0)) : 0;
     await addDoc(collection(db, "promes"), {
+      userId: user.id, // ISOLASI
       fase: filterFase, kelas: filterKelas, semester: filterSemester, mataPelajaran: filterMapel,
       materiPokok: type === 'ASESMEN' ? 'ASESMEN SUMATIF' : '', subMateri: '',
       tujuanPembelajaran: type === 'ASESMEN' ? 'Evaluasi pencapaian kompetensi' : '',
@@ -234,10 +246,10 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
   const importFromProta = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, "prota"), where("fase", "==", filterFase), where("kelas", "==", filterKelas), where("semester", "==", filterSemester), where("mataPelajaran", "==", filterMapel), where("school", "==", user.school));
+      const q = query(collection(db, "prota"), where("userId", "==", user.id), where("fase", "==", filterFase), where("kelas", "==", filterKelas), where("semester", "==", filterSemester), where("mataPelajaran", "==", filterMapel));
       const snap = await getDocs(q);
       if (snap.empty) {
-        setMessage({ text: 'Data PROTA tidak ditemukan untuk filter ini!', type: 'error' });
+        setMessage({ text: 'Data PROTA tidak ditemukan!', type: 'error' });
         setLoading(false); return;
       }
       let count = 0;
@@ -246,6 +258,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
         const isDuplicate = promesData.some(item => item.tujuanPembelajaran === p.tujuanPembelajaran && item.materiPokok === p.materiPokok);
         if (!isDuplicate) {
           await addDoc(collection(db, "promes"), {
+            userId: user.id, // ISOLASI
             fase: filterFase, kelas: filterKelas, semester: filterSemester, mataPelajaran: filterMapel,
             materiPokok: p.materiPokok, subMateri: p.subMateri, tujuanPembelajaran: p.tujuanPembelajaran,
             alokasiWaktu: p.jp, bulanPelaksanaan: '', jadwalMingguan: {}, keterangan: '', isAsesmen: false,
@@ -255,7 +268,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
           count++;
         }
       }
-      setMessage({ text: `Berhasil mengimpor ${count} data dari Program Tahunan secara linear.`, type: 'success' });
+      setMessage({ text: `Berhasil mengimpor ${count} data dari Program Tahunan.`, type: 'success' });
     } catch (err) { setMessage({ text: 'Gagal impor data.', type: 'error' }); } finally { setLoading(false); }
   };
 
@@ -301,11 +314,6 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
           <button onClick={handlePrint} className="bg-rose-600 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-2xl hover:bg-rose-700 transition-all">
             <Printer size={16}/> CETAK PDF
           </button>
-        </div>
-
-        <div className="no-print bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-8 text-[10px] font-bold text-amber-800 flex items-center gap-3">
-          <AlertCircle size={16}/> 
-          Jika dialog cetak tidak terbuka, pastikan pop-up di browser Anda tidak terblokir.
         </div>
 
         <div ref={printRef}>
@@ -377,7 +385,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
             <div className="p-8 text-center">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
               <h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus Item?</h3>
-              <p className="text-slate-500 font-medium text-sm">Hapus baris ini secara permanen dari Cloud?</p>
+              <p className="text-slate-500 font-medium text-sm">Hapus baris ini secara permanen?</p>
             </div>
             <div className="p-4 bg-slate-50 flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200">BATAL</button>
@@ -456,7 +464,7 @@ const PromesManager: React.FC<PromesManagerProps> = ({ user }) => {
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest">Mapel</label>
             <select className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-black outline-none" value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}>
-              {availableMapel.map(m => <option key={m} value={m}>{m}</option>)}
+              {(user.role === 'admin' ? MATA_PELAJARAN : (user.mapelDiampu || [])).map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
         </div>

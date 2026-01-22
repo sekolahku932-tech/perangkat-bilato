@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, SchoolSettings, User } from '../types';
-import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, DIMENSI_PROFIL, SchoolSettings, User } from '../types';
+import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle, ArrowLeft, CheckSquare, Square } from 'lucide-react';
 import { completeATPDetails } from '../services/geminiService';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
 
@@ -32,6 +32,9 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   const [activeYear, setActiveYear] = useState('2024/2025');
   const printRef = useRef<HTMLDivElement>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Quick selection for Dimensi
+  const [showDimensiPicker, setShowDimensiPicker] = useState<string | null>(null);
 
   useEffect(() => {
     if (user.role === 'guru') {
@@ -145,7 +148,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             tujuanPembelajaran: a.tujuanPembelajaran,
             alurTujuanPembelajaran: '', 
             alokasiWaktu: '',
-            dimensiProfilLulusan: '', // Important: Initialize this field
+            dimensiProfilLulusan: '', 
             asesmenAwal: '',
             asesmenProses: '',
             asesmenAkhir: '',
@@ -185,13 +188,13 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         await updateDoc(doc(db, "atp", id), {
           alurTujuanPembelajaran: suggestions.alurTujuan,
           alokasiWaktu: suggestions.alokasiWaktu,
-          dimensiProfilLulusan: suggestions.dimensiOfProfil, // FIXED: Map dimensiOfProfil to dimensiProfilLulusan
+          dimensiProfilLulusan: suggestions.dimensiOfProfil,
           asesmenAwal: suggestions.asesmenAwal,
           asesmenProses: suggestions.asesmenProses,
           asesmenAkhir: suggestions.asesmenAkhir,
           sumberBelajar: suggestions.sumberBelajar
         });
-        setMessage({ text: 'Detail ATP dilengkapi AI.', type: 'success' });
+        setMessage({ text: 'Detail ATP dilengkapi AI sesuai profil lulusan.', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (err) {
@@ -201,6 +204,16 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
   const updateField = async (id: string, field: keyof ATPItem, value: any) => {
     try { await updateDoc(doc(db, "atp", id), { [field]: value }); } catch (e) { console.error(e); }
+  };
+
+  const toggleDimensi = async (id: string, current: string, d: string) => {
+    let items = current.split(',').map(s => s.trim()).filter(Boolean);
+    if (items.includes(d)) {
+      items = items.filter(i => i !== d);
+    } else {
+      items = [...items, d];
+    }
+    await updateField(id, 'dimensiProfilLulusan', items.join(', '));
   };
 
   const handleDelete = async () => {
@@ -384,7 +397,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                 <th className="px-6 py-4 w-64 border-r border-white/5">Tujuan Pembelajaran (TP)</th>
                 <th className="px-6 py-4 w-80 border-r border-white/5 bg-slate-800">Alur Tujuan (ATP)</th>
                 <th className="px-6 py-4 w-48 border-r border-white/5">Materi & AW</th>
-                <th className="px-6 py-4 w-64 border-r border-white/5">Profil Lulusan</th>
+                <th className="px-6 py-4 w-64 border-r border-white/5">Profil Lulusan (8 Dimensi)</th>
                 <th className="px-6 py-4 w-80 border-r border-white/5">Rencana Asesmen</th>
                 <th className="px-6 py-4 w-32 text-center">Aksi</th>
               </tr>
@@ -420,9 +433,42 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                         <span className="text-[10px] font-black text-slate-400 uppercase">JP</span>
                       </div>
                     </td>
-                    <td className="px-6 py-6 border-r border-slate-50">
-                       {/* Bind correctly to dimensiProfilLulusan */}
-                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-bold text-slate-600 leading-relaxed resize-none p-0 h-32" value={item.dimensiProfilLulusan} onChange={e => updateField(item.id, 'dimensiProfilLulusan', e.target.value)} placeholder="Profil Pelajar Pancasila..." />
+                    <td className="px-6 py-6 border-r border-slate-50 relative group/dimensi">
+                       <div className="flex flex-col gap-3">
+                          <textarea 
+                            className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-black text-indigo-700 leading-relaxed resize-none p-0 h-24 italic" 
+                            value={item.dimensiProfilLulusan} 
+                            readOnly
+                            placeholder="Pilih 8 Dimensi Profil..." 
+                          />
+                          <button 
+                            onClick={() => setShowDimensiPicker(showDimensiPicker === item.id ? null : item.id)}
+                            className="text-[9px] font-black uppercase bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2"
+                          >
+                            <ListTree size={12}/> {showDimensiPicker === item.id ? 'Tutup Pilihan' : 'Pilihkan Dimensi'}
+                          </button>
+                       </div>
+                       
+                       {showDimensiPicker === item.id && (
+                         <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-3 border-b pb-2">8 Dimensi Profil Lulusan</p>
+                            <div className="grid grid-cols-1 gap-2">
+                               {DIMENSI_PROFIL.map(d => {
+                                 const isChecked = item.dimensiProfilLulusan.includes(d);
+                                 return (
+                                   <button 
+                                     key={d} 
+                                     onClick={() => toggleDimensi(item.id, item.dimensiProfilLulusan, d)}
+                                     className={`flex items-center gap-3 p-2 rounded-xl text-left transition-all ${isChecked ? 'bg-indigo-600 text-white' : 'hover:bg-slate-50 text-slate-600'}`}
+                                   >
+                                     {isChecked ? <CheckSquare size={14}/> : <Square size={14}/>}
+                                     <span className="text-[10px] font-bold">{d}</span>
+                                   </button>
+                                 );
+                               })}
+                            </div>
+                         </div>
+                       )}
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 space-y-2">
                        <div><label className="text-[8px] font-black text-slate-400 uppercase">Awal</label><input className="w-full bg-slate-50 border border-slate-100 p-2 rounded text-[10px]" value={item.asesmenAwal} onChange={e => updateField(item.id, 'asesmenAwal', e.target.value)} /></div>

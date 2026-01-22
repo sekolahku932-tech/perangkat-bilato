@@ -88,24 +88,27 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
 
 export const completeATPDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Lengkapi rincian ATP untuk Sekolah Dasar Kelas ${kelas}.
+  const prompt = `Lengkapi rincian Alur Tujuan Pembelajaran (ATP) SD Kelas ${kelas}.
   Tujuan Pembelajaran (TP): "${tp}"
-  Materi: "${materi}"
+  Materi Utama: "${materi}"
   
-  TUGAS:
-  1. Susun rincian Alur Tujuan Pembelajaran (ATP) yang logis.
-  2. Tentukan Alokasi Waktu (JP).
-  3. Pilih 1-3 Dimensi Profil Lulusan yang paling sesuai dari daftar eksklusif berikut:
-     - Keimanan dan Ketakwaan
-     - Kewargaan
-     - Penalaran Kritis
-     - Kreativitas
-     - Kolaborasi
-     - Kemandirian
-     - Kesehatan
-     - Komunikasi
-  4. Rancang Asesmen Awal, Proses, dan Akhir yang relevan.
-  5. Rekomendasikan Sumber Belajar.`;
+  TUGAS KHUSUS DIMENSI PROFIL LULUSAN:
+  Analisis karakter dan kompetensi yang dibutuhkan siswa untuk menguasai TP tersebut.
+  Pilih 1-3 item yang paling relevan HANYA dari 8 Dimensi Profil Lulusan berikut:
+  1. Keimanan dan Ketakwaan
+  2. Kewargaan
+  3. Penalaran Kritis
+  4. Kreativitas
+  5. Kolaborasi
+  6. Kemandirian
+  7. Kesehatan
+  8. Komunikasi
+
+  OUTPUT LAINNYA:
+  - Rincian Alur Tujuan (ATP) yang operasional.
+  - Alokasi Waktu (JP) yang masuk akal.
+  - Rancangan Asesmen Awal, Proses, dan Akhir.
+  - Sumber Belajar yang disarankan.`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -116,7 +119,10 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         properties: {
           alurTujuan: { type: Type.STRING },
           alokasiWaktu: { type: Type.STRING },
-          dimensiOfProfil: { type: Type.STRING, description: "Pilih hanya dari 8 dimensi yang disediakan, pisahkan dengan koma" },
+          dimensiOfProfil: { 
+            type: Type.STRING, 
+            description: "Pilih 1-3 dari 8 dimensi resmi (Keimanan dan Ketakwaan, Kewargaan, Penalaran Kritis, Kreativitas, Kolaborasi, Kemandirian, Kesehatan, Komunikasi). Pisahkan dengan koma." 
+          },
           asesmenAwal: { type: Type.STRING },
           asesmenProses: { type: Type.STRING },
           asesmenAkhir: { type: Type.STRING },

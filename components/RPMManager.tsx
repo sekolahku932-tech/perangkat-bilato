@@ -378,17 +378,28 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     const promes = promesData.find(p => p.tujuanPembelajaran === atp.tujuanPembelajaran);
     const selectedDimensi: string[] = [];
     const rawText = ((atp.dimensiProfilLulusan || '') + ' ' + (atp.tujuanPembelajaran || '')).toLowerCase();
+    
+    // Updated Keyword Mapping for the 8 Dimensions
     const mapping = [
       { key: DIMENSI_PROFIL[0], words: ['keimanan', 'ketakwaan', 'beriman', 'takwa', 'akhlak', 'tuhan', 'esa'] }, 
-      { key: DIMENSI_PROFIL[1], words: ['kewargaan', 'kebinekaan', 'global', 'negara', 'warga'] },       
-      { key: DIMENSI_PROFIL[2], words: ['penalaran kritis', 'bernalar kritis', 'kritis', 'analisis', 'logis'] },    
-      { key: DIMENSI_PROFIL[3], words: ['kreativitas', 'kreatif', 'karya', 'cipta'] },                           
-      { key: DIMENSI_PROFIL[4], words: ['kolaborasi', 'gotong royong', 'kerjasama', 'tim', 'bersama'] },          
-      { key: DIMENSI_PROFIL[5], words: ['kemandirian', 'mandiri', 'sendiri', 'disiplin'] },                           
-      { key: DIMENSI_PROFIL[6], words: ['kesehatan', 'jasmani', 'sehat', 'olahraga', 'fisik'] },                    
-      { key: DIMENSI_PROFIL[7], words: ['komunikasi', 'bahasa', 'bicara', 'presentasi', 'interaksi'] }                    
+      { key: DIMENSI_PROFIL[1], words: ['kewargaan', 'kebinekaan', 'global', 'negara', 'warga', 'masyarakat', 'hukum'] },       
+      { key: DIMENSI_PROFIL[2], words: ['penalaran kritis', 'bernalar kritis', 'kritis', 'analisis', 'logis', 'evaluasi'] },    
+      { key: DIMENSI_PROFIL[3], words: ['kreativitas', 'kreatif', 'karya', 'cipta', 'inovasi', 'ide baru'] },                           
+      { key: DIMENSI_PROFIL[4], words: ['kolaborasi', 'gotong royong', 'kerjasama', 'tim', 'bersama', 'berbagi'] },          
+      { key: DIMENSI_PROFIL[5], words: ['kemandirian', 'mandiri', 'sendiri', 'disiplin', 'tanggung jawab'] },                           
+      { key: DIMENSI_PROFIL[6], words: ['kesehatan', 'jasmani', 'sehat', 'olahraga', 'fisik', 'nutrisi', 'higienis'] },                    
+      { key: DIMENSI_PROFIL[7], words: ['komunikasi', 'bahasa', 'bicara', 'presentasi', 'interaksi', 'dialog'] }                    
     ];
+    
     mapping.forEach(m => { if (m.words.some(word => rawText.includes(word))) selectedDimensi.push(m.key); });
+    
+    // Also include what's already written in ATP's dimensiProfilLulusan if it matches any dimension name exactly
+    DIMENSI_PROFIL.forEach(dim => {
+      if (atp.dimensiProfilLulusan.toLowerCase().includes(dim.toLowerCase()) && !selectedDimensi.includes(dim)) {
+        selectedDimensi.push(dim);
+      }
+    });
+
     try {
       await updateDoc(doc(db, "rpm", id), {
         atpId, tujuanPembelajaran: atp.tujuanPembelajaran, materi: atp.materi, subMateri: atp.subMateri,

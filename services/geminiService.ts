@@ -88,6 +88,25 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
 
 export const completeATPDetails = async (tp: string, materi: string, kelas: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Lengkapi rincian ATP untuk Sekolah Dasar Kelas ${kelas}.
+  Tujuan Pembelajaran (TP): "${tp}"
+  Materi: "${materi}"
+  
+  TUGAS:
+  1. Susun rincian Alur Tujuan Pembelajaran (ATP) yang logis.
+  2. Tentukan Alokasi Waktu (JP).
+  3. Pilih 1-3 Dimensi Profil Lulusan yang paling sesuai dari daftar eksklusif berikut:
+     - Keimanan dan Ketakwaan
+     - Kewargaan
+     - Penalaran Kritis
+     - Kreativitas
+     - Kolaborasi
+     - Kemandirian
+     - Kesehatan
+     - Komunikasi
+  4. Rancang Asesmen Awal, Proses, dan Akhir yang relevan.
+  5. Rekomendasikan Sumber Belajar.`;
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -97,7 +116,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         properties: {
           alurTujuan: { type: Type.STRING },
           alokasiWaktu: { type: Type.STRING },
-          dimensiOfProfil: { type: Type.STRING },
+          dimensiOfProfil: { type: Type.STRING, description: "Pilih hanya dari 8 dimensi yang disediakan, pisahkan dengan koma" },
           asesmenAwal: { type: Type.STRING },
           asesmenProses: { type: Type.STRING },
           asesmenAkhir: { type: Type.STRING },
@@ -105,7 +124,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         }
       }
     },
-    contents: `Lengkapi detail ATP: TP "${tp}"`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };
@@ -135,7 +154,7 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
   
   INSTRUKSI KHUSUS LANGKAH PEMBELAJARAN (WAJIB):
   1. Sajikan langkah pembelajaran dalam rincian butir-butir bernomor (1., 2., 3., dst) yang berurut ke bawah secara vertikal.
-  2. SETIAP SATU BUTIR langkah harus berupa kalimat naratif yang PANJANG dan DESKRIPTIF (min 20 kata).
+  2. SETIAP SATU BUTIR langkah harus berupa kalimat naratif yang PANJANG and DESKRIPTIF (min 20 kata).
   3. DI AKHIR SETIAP KALIMAT langkah, Anda WAJIB menyertakan salah satu label filosofi berikut: [Bermakna], [Menggembirakan], atau [Berkesadaran] (Pilih yang paling sesuai dengan aktivitasnya).
   4. Gunakan label "Pertemuan 1:", "Pertemuan 2:", dst untuk memisahkan sesi jika jumlahPertemuan > 1 di dalam kolom teks.
   5. JANGAN menuliskan kembali judul bagian (seperti "I. MEMAHAMI") di dalam teks isi.

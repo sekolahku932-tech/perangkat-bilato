@@ -307,7 +307,7 @@ export const SEMUA_AKTIVITAS = [
 ];
 
 export const DIMENSI_PROFIL = [
-  'Keimanan & Ketakwaan',
+  'Keimanan dan Ketakwaan',
   'Kewargaan',
   'Penalaran Kritis',
   'Kreativitas',

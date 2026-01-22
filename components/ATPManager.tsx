@@ -143,9 +143,9 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             materi: a.materi,
             subMateri: a.subMateri || '',
             tujuanPembelajaran: a.tujuanPembelajaran,
-            alurTujuanPembelajaran: '', // To be filled manually or by AI
+            alurTujuanPembelajaran: '', 
             alokasiWaktu: '',
-            dimensiProfilLulusan: '',
+            dimensiProfilLulusan: '', // Important: Initialize this field
             asesmenAwal: '',
             asesmenProses: '',
             asesmenAkhir: '',
@@ -185,7 +185,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         await updateDoc(doc(db, "atp", id), {
           alurTujuanPembelajaran: suggestions.alurTujuan,
           alokasiWaktu: suggestions.alokasiWaktu,
-          dimensiOfProfil: suggestions.dimensiOfProfil,
+          dimensiProfilLulusan: suggestions.dimensiOfProfil, // FIXED: Map dimensiOfProfil to dimensiProfilLulusan
           asesmenAwal: suggestions.asesmenAwal,
           asesmenProses: suggestions.asesmenProses,
           asesmenAkhir: suggestions.asesmenAkhir,
@@ -421,7 +421,8 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                       </div>
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50">
-                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-bold text-slate-600 leading-relaxed resize-none p-0 h-32" value={item.dimensiProfilLulusan} onChange={e => updateField(item.id, 'dimensiProfilLulusan', e.target.value)} />
+                       {/* Bind correctly to dimensiProfilLulusan */}
+                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-bold text-slate-600 leading-relaxed resize-none p-0 h-32" value={item.dimensiProfilLulusan} onChange={e => updateField(item.id, 'dimensiProfilLulusan', e.target.value)} placeholder="Profil Pelajar Pancasila..." />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 space-y-2">
                        <div><label className="text-[8px] font-black text-slate-400 uppercase">Awal</label><input className="w-full bg-slate-50 border border-slate-100 p-2 rounded text-[10px]" value={item.asesmenAwal} onChange={e => updateField(item.id, 'asesmenAwal', e.target.value)} /></div>

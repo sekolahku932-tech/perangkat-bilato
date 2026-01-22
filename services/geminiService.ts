@@ -64,6 +64,23 @@ export const analyzeDocuments = async (files: UploadedFile[], prompt: string, ap
 
 export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: string, kelas: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Analisis Capaian Pembelajaran (CP) untuk Kelas ${kelas} SD. 
+  CP: "${cpContent}" 
+  Elemen: "${elemen}"
+  
+  TUGAS:
+  1. Pecah CP tersebut menjadi beberapa Tujuan Pembelajaran (TP) yang spesifik dan terukur.
+  2. Tentukan Materi Pokok dan Sub Materi untuk setiap TP.
+  3. Lakukan analisis karakter: Pilih 1-3 Dimensi Profil Lulusan yang paling relevan untuk setiap TP HANYA dari 8 daftar berikut:
+     - Keimanan dan Ketakwaan
+     - Kewargaan
+     - Penalaran Kritis
+     - Kreativitas
+     - Kolaborasi
+     - Kemandirian
+     - Kesehatan
+     - Komunikasi`;
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
@@ -75,13 +92,14 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
           properties: {
             materi: { type: Type.STRING },
             subMateri: { type: Type.STRING },
-            tp: { type: Type.STRING }
+            tp: { type: Type.STRING },
+            profilLulusan: { type: Type.STRING, description: "1-3 dimensi dari daftar resmi, pisahkan dengan koma." }
           },
-          required: ['materi', 'subMateri', 'tp']
+          required: ['materi', 'subMateri', 'tp', 'profilLulusan']
         }
       }
     },
-    contents: `Analisis CP Kelas ${kelas}: "${cpContent}"`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };
@@ -93,7 +111,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
   Materi Utama: "${materi}"
   
   TUGAS KHUSUS DIMENSI PROFIL LULUSAN:
-  Analisis karakter dan kompetensi yang dibutuhkan siswa untuk menguasai TP tersebut.
+  Lakukan analisis mendalam terhadap kompetensi yang dituju oleh TP ini.
   Pilih 1-3 item yang paling relevan HANYA dari 8 Dimensi Profil Lulusan berikut:
   1. Keimanan dan Ketakwaan
   2. Kewargaan
@@ -104,11 +122,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
   7. Kesehatan
   8. Komunikasi
 
-  OUTPUT LAINNYA:
-  - Rincian Alur Tujuan (ATP) yang operasional.
-  - Alokasi Waktu (JP) yang masuk akal.
-  - Rancangan Asesmen Awal, Proses, dan Akhir.
-  - Sumber Belajar yang disarankan.`;
+  Sajikan juga rincian Alur Tujuan (ATP), Alokasi Waktu (JP), rancangan Asesmen (Awal, Proses, Akhir), dan Sumber Belajar.`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -121,7 +135,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
           alokasiWaktu: { type: Type.STRING },
           dimensiOfProfil: { 
             type: Type.STRING, 
-            description: "Pilih 1-3 dari 8 dimensi resmi (Keimanan dan Ketakwaan, Kewargaan, Penalaran Kritis, Kreativitas, Kolaborasi, Kemandirian, Kesehatan, Komunikasi). Pisahkan dengan koma." 
+            description: "Hasil analisis: 1-3 dari 8 dimensi resmi. Pisahkan dengan koma." 
           },
           asesmenAwal: { type: Type.STRING },
           asesmenProses: { type: Type.STRING },
@@ -181,9 +195,9 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
-          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
-          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, dan akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" }
+          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
+          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
+          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" }
         }
       }
     },

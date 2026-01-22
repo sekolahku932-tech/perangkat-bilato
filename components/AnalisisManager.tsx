@@ -117,7 +117,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
         for (const res of results) {
           lastOrder++;
           await addDoc(collection(db, "analisis"), {
-            userId: user.id, // ISOLASI
+            userId: user.id,
             cpId: cp.id,
             fase: filterFase,
             kelas: filterKelas,
@@ -125,11 +125,12 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
             materi: res.materi,
             subMateri: res.subMateri || '',
             tujuanPembelajaran: res.tp,
+            profilLulusan: res.profilLulusan || '', // AI-driven analysis
             indexOrder: lastOrder,
             school: user.school
           });
         }
-        setMessage({ text: 'Analisis AI Berhasil!', type: 'success' });
+        setMessage({ text: 'Analisis AI Berhasil termasuk Profil Lulusan!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (error: any) {
@@ -192,7 +193,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
               <tr className="bg-slate-50">
                 <th className="border-2 border-black px-2 py-3 w-10 text-center">NO</th>
                 <th className="border-2 border-black px-3 py-3 text-left w-64">CAPAIAN PEMBELAJARAN (CP)</th>
-                <th className="border-2 border-black px-3 py-3 text-left w-48">MATERI POKOK</th>
+                <th className="border-2 border-black px-3 py-3 text-left w-48">MATERI & PROFIL LULUSAN</th>
                 <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN (TP)</th>
               </tr>
             </thead>
@@ -206,7 +207,10 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
                       <span className="font-black text-slate-900 not-italic block mb-1">[{cpData?.kode || '-'}] {cpData?.elemen || '-'}</span>
                       "{cpData?.deskripsi || '-'}"
                     </td>
-                    <td className="border-2 border-black p-3 font-black uppercase">{item.materi}</td>
+                    <td className="border-2 border-black p-3 font-black uppercase">
+                       <p className="mb-2">{item.materi}</p>
+                       <p className="text-[8px] text-blue-600 italic">Profil: {item.profilLulusan || '-'}</p>
+                    </td>
                     <td className="border-2 border-black p-3 leading-relaxed font-medium">{item.tujuanPembelajaran}</td>
                   </tr>
                 );
@@ -326,26 +330,31 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest h-12">
                     <th className="px-6 py-2 w-[5%] text-center">No</th>
-                    <th className="px-6 py-2 w-[30%]">CP Asal</th>
-                    <th className="px-6 py-2 w-[20%]">Materi Pokok</th>
-                    <th className="px-6 py-2 w-[35%]">TP Hasil Analisis</th>
+                    <th className="px-6 py-2 w-[30%]">Materi & Profil</th>
+                    <th className="px-6 py-2 w-[55%]">TP Hasil Analisis</th>
                     <th className="px-6 py-2 w-[10%] text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredAnalisis.length === 0 ? (
-                    <tr><td colSpan={5} className="py-32 text-center text-slate-300 font-bold uppercase text-xs tracking-widest">Belum ada hasil analisis untuk sekolah ini</td></tr>
+                    <tr><td colSpan={4} className="py-32 text-center text-slate-300 font-bold uppercase text-xs tracking-widest">Belum ada hasil analisis untuk sekolah ini</td></tr>
                   ) : filteredAnalisis.map((item, idx) => {
-                    const cpDesc = cpLookup[item.cpId] || '-';
                     return (
                       <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top">
                         <td className="px-6 py-6 text-center font-black text-slate-300">{idx + 1}</td>
-                        <td className="px-6 py-6 text-[10px] text-slate-500 italic leading-relaxed line-clamp-3">{cpDesc}</td>
-                        <td className="px-6 py-6">
-                           <textarea className="w-full bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-[10px] font-black text-emerald-800 uppercase resize-none h-20 outline-none" value={item.materi} onChange={e => updateDoc(doc(db, "analisis", item.id), { materi: e.target.value })} />
+                        <td className="px-6 py-6 space-y-3">
+                           <div>
+                             <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Materi Pokok</label>
+                             <textarea className="w-full bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-[10px] font-black text-emerald-800 uppercase resize-none h-16 outline-none" value={item.materi} onChange={e => updateDoc(doc(db, "analisis", item.id), { materi: e.target.value })} />
+                           </div>
+                           <div>
+                             <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Profil Lulusan (AI Analyzed)</label>
+                             <textarea className="w-full bg-blue-50/50 border border-blue-100 rounded-xl p-3 text-[9px] font-bold text-blue-700 italic resize-none h-16 outline-none" value={item.profilLulusan} onChange={e => updateDoc(doc(db, "analisis", item.id), { profilLulusan: e.target.value })} />
+                           </div>
                         </td>
                         <td className="px-6 py-6">
-                           <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 leading-relaxed resize-none p-0 h-24" value={item.tujuanPembelajaran} onChange={e => updateDoc(doc(db, "analisis", item.id), { tujuanPembelajaran: e.target.value })} />
+                           <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Tujuan Pembelajaran</label>
+                           <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 leading-relaxed resize-none p-0 h-32" value={item.tujuanPembelajaran} onChange={e => updateDoc(doc(db, "analisis", item.id), { tujuanPembelajaran: e.target.value })} />
                         </td>
                         <td className="px-6 py-6 text-center">
                           <button onClick={() => deleteDoc(doc(db, "analisis", item.id))} className="p-2 text-slate-300 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>

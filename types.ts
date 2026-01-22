@@ -173,6 +173,7 @@ export interface AnalisisCP {
   materi: string;
   subMateri: string;
   tujuanPembelajaran: string;
+  profilLulusan: string; // Added field
   indexOrder: number;
   school: string;
 }

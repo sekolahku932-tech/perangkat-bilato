@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, DIMENSI_PROFIL, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle, ArrowLeft } from 'lucide-react';
 import { completeATPDetails } from '../services/geminiService';
-import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from '../services/firebase';
+import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from '../services/firebase';
 
 interface ATPManagerProps {
   user: User;
@@ -69,19 +69,18 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    // ATP data isolated by user
+    // ISOLASI DATA ATP PERSONAL
     const qAtp = query(collection(db, "atp"), where("userId", "==", user.id));
     const unsubATP = onSnapshot(qAtp, (snap) => {
       setAtpData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
     });
 
-    // Reference CP data for elements
     const qCp = query(collection(db, "cps"), where("school", "==", user.school));
     const unsubCp = onSnapshot(qCp, snap => {
       setCps(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
     });
 
-    // Sync from user's own analysis results
+    // ISOLASI DATA ANALISIS PERSONAL
     const qAnalisis = query(collection(db, "analisis"), where("userId", "==", user.id));
     const unsubAnalisis = onSnapshot(qAnalisis, snap => {
       setAllAnalisis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AnalisisCP[]);
@@ -99,14 +98,12 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         item.kelas === filterKelas && 
         (item.mataPelajaran || '').trim().toLowerCase() === currentMapelNormalized
       )
-      // SORT BY INDEX ORDER (Urutan dari Capaian Pembelajaran)
       .sort((a, b) => (a.indexOrder || 0) - (b.indexOrder || 0));
   }, [atpData, filterFase, filterKelas, filterMapel]);
 
   const handleSyncFromAnalisis = async () => {
     setLoading(true);
     try {
-      // 1. Get user's analysis data and sort it strictly by CP sequence (indexOrder)
       const sourceAnalisis = allAnalisis
         .filter(a => 
           a.fase === filterFase && 
@@ -123,7 +120,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
       let count = 0;
       for (const a of sourceAnalisis) {
-        // Prevent duplicate syncs based on the same learning goal text
         const alreadyExists = atpData.some(atp => 
           atp.tujuanPembelajaran.trim().toLowerCase() === a.tujuanPembelajaran.trim().toLowerCase() && 
           atp.kelas === filterKelas && 
@@ -135,6 +131,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
           const cpInfo = cps.find(cp => cp.id === a.cpId);
           await addDoc(collection(db, "atp"), {
             userId: user.id,
+            kodeCP: a.kodeCP || cpInfo?.kode || '-', 
             fase: a.fase,
             kelas: a.kelas,
             mataPelajaran: a.mataPelajaran,
@@ -144,13 +141,13 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             subMateri: a.subMateri || '',
             tujuanPembelajaran: a.tujuanPembelajaran,
             alurTujuanPembelajaran: '', 
-            alokasiWaktu: '',
-            dimensiProfilLulusan: a.profilLulusan || '', // Inherit from AI Analysis
+            alokasiWaktu: '4 JP', 
+            dimensiProfilLulusan: a.profilLulusan || '',
             asesmenAwal: '',
             asesmenProses: '',
             asesmenAkhir: '',
             sumberBelajar: '',
-            indexOrder: a.indexOrder || 0, // CRITICAL: PERSIST THE CP SEQUENCE ORDER
+            indexOrder: a.indexOrder || 0,
             school: user.school
           });
           count++;
@@ -158,7 +155,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       }
       
       if (count > 0) {
-        setMessage({ text: `Sinkronisasi Berhasil: ${count} item ditambahkan (termasuk Profil Lulusan hasil AI).`, type: 'success' });
+        setMessage({ text: `Sinkronisasi Berhasil: ${count} item ditambahkan ke ATP personal.`, type: 'success' });
       } else {
         setMessage({ text: 'Seluruh data analisis sudah tersinkron ke ATP Anda.', type: 'info' });
       }
@@ -182,16 +179,15 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
     try {
       const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas, user.apiKey);
       if (suggestions) {
-        await updateDoc(doc(db, "atp", id), {
-          alurTujuanPembelajaran: suggestions.alurTujuan,
-          alokasiWaktu: suggestions.alokasiWaktu,
-          dimensiProfilLulusan: suggestions.dimensiOfProfil,
-          asesmenAwal: suggestions.asesmenAwal,
-          asesmenProses: suggestions.asesmenProses,
-          asesmenAkhir: suggestions.asesmenAkhir,
-          sumberBelajar: suggestions.sumberBelajar
-        });
-        setMessage({ text: 'Detail ATP dilengkapi AI sesuai profil lulusan.', type: 'success' });
+        await updateField(id, 'alurTujuanPembelajaran', suggestions.alurTujuan);
+        await updateField(id, 'alokasiWaktu', suggestions.alokasiWaktu);
+        await updateField(id, 'dimensiProfilLulusan', suggestions.dimensiOfProfil);
+        await updateField(id, 'asesmenAwal', suggestions.asesmenAwal);
+        await updateField(id, 'asesmenProses', suggestions.asesmenProses);
+        await updateField(id, 'asesmenAkhir', suggestions.asesmenAkhir);
+        await updateField(id, 'sumberBelajar', suggestions.sumberBelajar);
+        
+        setMessage({ text: 'Detail ATP dilengkapi AI dan disinkronkan!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (err) {
@@ -200,7 +196,43 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   };
 
   const updateField = async (id: string, field: keyof ATPItem, value: any) => {
-    try { await updateDoc(doc(db, "atp", id), { [field]: value }); } catch (e) { console.error(e); }
+    try {
+      // 1. Update Dokumen ATP itu sendiri
+      await updateDoc(doc(db, "atp", id), { [field]: value });
+
+      // 2. LOGIKA INTEGRASI OTOMATIS (CASCADING UPDATE)
+      const syncFields = ['tujuanPembelajaran', 'materi', 'alokasiWaktu', 'kodeCP'];
+      
+      if (syncFields.includes(field)) {
+        // Cari Dokumen Prota yang tertaut
+        const qProta = query(collection(db, "prota"), where("atpId", "==", id));
+        const snapProta = await getDocs(qProta);
+        snapProta.forEach(async (d) => {
+          let protaField: string = field;
+          if (field === 'materi') protaField = 'materiPokok';
+          if (field === 'alokasiWaktu') protaField = 'jp';
+          await updateDoc(doc(db, "prota", d.id), { [protaField]: value });
+        });
+
+        // Cari Dokumen Promes yang tertaut
+        const qPromes = query(collection(db, "promes"), where("atpId", "==", id));
+        const snapPromes = await getDocs(qPromes);
+        snapPromes.forEach(async (d) => {
+          let promesField: string = field;
+          if (field === 'materi') promesField = 'materiPokok';
+          await updateDoc(doc(db, "promes", d.id), { [promesField]: value });
+        });
+
+        // Update RPM juga jika ada
+        const qRPM = query(collection(db, "rpm"), where("atpId", "==", id));
+        const snapRPM = await getDocs(qRPM);
+        snapRPM.forEach(async (d) => {
+          await updateDoc(doc(db, "rpm", d.id), { [field]: value });
+        });
+      }
+    } catch (e) {
+      console.error("Gagal sinkronisasi data terkait:", e);
+    }
   };
 
   const handleDelete = async () => {
@@ -265,11 +297,12 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             <thead>
               <tr className="bg-slate-50">
                 <th className="border-2 border-black p-2 w-8">NO</th>
+                <th className="border-2 border-black p-2 w-16">KODE</th>
                 <th className="border-2 border-black p-2 w-32">ELEMEN / CP</th>
                 <th className="border-2 border-black p-2 w-48">TUJUAN PEMBELAJARAN (TP)</th>
                 <th className="border-2 border-black p-2 w-56">ALUR TUJUAN PEMBELAJARAN (ATP)</th>
                 <th className="border-2 border-black p-2 w-16">MATERI / AW</th>
-                <th className="border-2 border-black p-2 w-32">PROFIL LULUSAN</th>
+                <th className="border-2 border-black p-2 w-32">DIMENSI PROFIL LULUSAN</th>
                 <th className="border-2 border-black p-2">RENCANA ASESMEN</th>
               </tr>
             </thead>
@@ -277,6 +310,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
               {filteredAtp.map((item, idx) => (
                 <tr key={item.id} className="break-inside-avoid align-top">
                   <td className="border-2 border-black p-2 text-center font-bold">{idx + 1}</td>
+                  <td className="border-2 border-black p-2 text-center font-black">{item.kodeCP || '-'}</td>
                   <td className="border-2 border-black p-2 leading-tight">
                     <span className="font-black block uppercase mb-1">{item.elemen}</span>
                     <span className="italic text-slate-600 line-clamp-6">{item.capaianPembelajaran}</span>
@@ -285,7 +319,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                   <td className="border-2 border-black p-2 leading-tight italic">{item.alurTujuanPembelajaran}</td>
                   <td className="border-2 border-black p-2 text-center">
                     <span className="block font-black uppercase mb-1">{item.materi}</span>
-                    <span className="bg-slate-100 px-2 py-0.5 rounded font-bold border border-slate-300">{item.alokasiWaktu} JP</span>
+                    <span className="bg-slate-100 px-2 py-0.5 rounded font-bold border border-slate-300">{item.alokasiWaktu}</span>
                   </td>
                   <td className="border-2 border-black p-2 leading-tight text-[7px] font-medium">{item.dimensiProfilLulusan}</td>
                   <td className="border-2 border-black p-2 leading-tight">
@@ -296,7 +330,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                 </tr>
               ))}
               {filteredAtp.length === 0 && (
-                <tr><td colSpan={7} className="p-10 text-center italic">Belum ada data ATP.</td></tr>
+                <tr><td colSpan={8} className="p-10 text-center italic">Belum ada data ATP.</td></tr>
               )}
             </tbody>
           </table>
@@ -329,7 +363,7 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
             <div className="p-8 text-center">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
               <h3 className="text-xl font-black text-slate-900 uppercase mb-2">Hapus ATP</h3>
-              <p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris ATP ini dari database Anda?</p>
+              <p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris ATP ini dari database Anda? Data yang sudah tersinkron ke Prota/Promes akan tetap ada namun kehilangan tautan sinkronisasi otomatis.</p>
             </div>
             <div className="p-4 bg-slate-50 flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition-all">BATAL</button>
@@ -350,9 +384,9 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
            </div>
            <div className="flex flex-wrap gap-2">
              <button onClick={handleSyncFromAnalisis} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg">
-                <Copy size={16}/> AMBIL DATA ANALISIS CP (SINKRON URUTAN & PROFIL)
+                <Copy size={16}/> AMBIL DATA ANALISIS CP (PERSONAL)
              </button>
-             <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg">
+             <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-black shadow-lg transition-all shadow-lg">
                 <Printer size={16}/> PRATINJAU
              </button>
            </div>
@@ -376,32 +410,37 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
 
       <div className="bg-white rounded-[40px] shadow-xl border border-slate-200 overflow-hidden min-h-[500px]">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[2000px]">
+          <table className="w-full text-left border-collapse min-w-[2200px]">
             <thead>
               <tr className="bg-slate-900 text-white text-[10px] font-black h-16 uppercase tracking-widest">
                 <th className="px-6 py-4 w-16 text-center border-r border-white/5">No</th>
+                <th className="px-6 py-4 w-24 text-center border-r border-white/5">Kode CP</th>
                 <th className="px-6 py-4 w-72 border-r border-white/5">Elemen & Capaian (CP)</th>
                 <th className="px-6 py-4 w-64 border-r border-white/5">Tujuan Pembelajaran (TP)</th>
                 <th className="px-6 py-4 w-80 border-r border-white/5 bg-slate-800">Alur Tujuan (ATP)</th>
                 <th className="px-6 py-4 w-48 border-r border-white/5">Materi & AW</th>
-                <th className="px-6 py-4 w-64 border-r border-white/5">Profil Lulusan (8 Dimensi)</th>
+                <th className="px-6 py-4 w-64 border-r border-white/5">Dimensi Profil Lulusan</th>
                 <th className="px-6 py-4 w-80 border-r border-white/5">Rencana Asesmen</th>
                 <th className="px-6 py-4 w-32 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={8} className="py-20 text-center"><Loader2 className="animate-spin inline-block text-blue-600" /></td></tr>
+                <tr><td colSpan={9} className="py-20 text-center"><Loader2 className="animate-spin inline-block text-blue-600" /></td></tr>
               ) : filteredAtp.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-24 text-center text-slate-400 italic font-bold uppercase text-xs">Data ATP kosong untuk kriteria ini. Klik "Ambil Data Analisis" untuk memulai sesuai urutan kurikulum.</td></tr>
+                <tr><td colSpan={9} className="px-6 py-24 text-center text-slate-400 italic font-bold uppercase text-xs">Data ATP kosong untuk filter ini. Klik "Ambil Data Analisis" untuk memulai data personal Anda.</td></tr>
               ) : (
                 filteredAtp.map((item, idx) => (
                   <tr key={item.id} className="align-top group hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-6 text-center font-black text-slate-300">
                       <div className="flex flex-col gap-1">
                         <span>{idx + 1}</span>
-                        <span className="text-[8px] bg-slate-100 text-slate-400 px-1 rounded">CPSeq:{item.indexOrder}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-6 border-r border-slate-50 text-center">
+                       <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black border border-indigo-100 uppercase">
+                         {item.kodeCP || '-'}
+                       </span>
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50">
                       <div className="font-black text-[10px] text-blue-600 uppercase mb-2">{item.elemen}</div>
@@ -411,22 +450,25 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-900 leading-relaxed resize-none p-0 h-32" value={item.tujuanPembelajaran} onChange={e => updateField(item.id, 'tujuanPembelajaran', e.target.value)} />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 bg-blue-50/10">
-                      <textarea className="w-full bg-transparent border-none focus:ring-0 text-xs font-medium text-blue-900 leading-relaxed resize-none p-0 h-32" value={item.alurTujuanPembelajaran} onChange={e => updateField(item.id, 'alurTujuanPembelajaran', e.target.value)} placeholder="Tulis rincian alur atau gunakan tombol AI di kanan..." />
+                      <textarea className="w-full bg-transparent border-none focus:ring-0 text-xs font-medium text-blue-900 leading-relaxed resize-none p-0 h-32" value={item.alurTujuanPembelajaran} onChange={e => updateField(item.id, 'alurTujuanPembelajaran', e.target.value)} placeholder="Tulis rincian alur..." />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50">
                       <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black uppercase mb-2" value={item.materi} onChange={e => updateField(item.id, 'materi', e.target.value)} placeholder="Materi" />
                       <div className="flex items-center gap-2">
-                        <input className="w-20 bg-slate-900 text-white border-none rounded-lg p-2 text-center text-xs font-black" value={item.alokasiWaktu} onChange={e => updateField(item.id, 'alokasiWaktu', e.target.value)} placeholder="JP" />
-                        <span className="text-[10px] font-black text-slate-400 uppercase">JP</span>
+                        <input 
+                          className="w-full bg-slate-900 text-white border-none rounded-lg p-2 text-center text-xs font-black" 
+                          value={item.alokasiWaktu} 
+                          onChange={e => updateField(item.id, 'alokasiWaktu', e.target.value)} 
+                          placeholder="Contoh: 4 JP" 
+                        />
                       </div>
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 relative">
-                       {/* Simplified Column: Just display/edit results of AI analysis */}
                        <textarea 
                           className="w-full bg-transparent border-none focus:ring-0 text-[10px] font-black text-indigo-700 leading-relaxed resize-none p-0 h-32 italic" 
                           value={item.dimensiProfilLulusan} 
                           onChange={e => updateField(item.id, 'dimensiProfilLulusan', e.target.value)}
-                          placeholder="Analisis AI akan memilih 8 Dimensi..." 
+                          placeholder="8 Dimensi Profil Lulusan..." 
                        />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 space-y-2">
@@ -436,10 +478,10 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
                     </td>
                     <td className="px-6 py-6 text-center">
                       <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button title="Lengkapi Detail dengan AI" onClick={() => handleAIComplete(item.id)} disabled={isProcessingId === item.id} className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 shadow-lg disabled:opacity-50">
+                        <button title="Lengkapi dengan AI" onClick={() => handleAIComplete(item.id)} disabled={isProcessingId === item.id} className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 shadow-lg disabled:opacity-50">
                           {isProcessingId === item.id ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
                         </button>
-                        <button title="Hapus Baris" onClick={() => setDeleteConfirmId(item.id)} className="bg-red-50 text-red-600 p-3 rounded-xl hover:bg-red-600 hover:text-white transition-all">
+                        <button title="Hapus" onClick={() => setDeleteConfirmId(item.id)} className="bg-red-50 text-red-600 p-3 rounded-xl hover:bg-red-600 hover:text-white transition-all">
                           <Trash2 size={18} />
                         </button>
                       </div>

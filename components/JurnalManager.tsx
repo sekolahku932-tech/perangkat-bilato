@@ -58,33 +58,35 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
       const yearList = snap.docs.map(d => ({ id: d.id, ...d.data() })) as AcademicYear[];
       setYears(yearList.filter(y => (y as any).school === user.school));
       const active = yearList.find(y => y.isActive && (y as any).school === user.school);
+      // Fix: Directly access the year property on the mapped AcademicYear object instead of calling .data()
       if (active) setActiveYear(active.year);
     });
 
-    const qJurnal = query(collection(db, "jurnal_harian"), where("school", "==", user.school));
+    // ISOLASI DATA: Hanya ambil data milik user yang sedang login
+    const qJurnal = query(collection(db, "jurnal_harian"), where("userId", "==", user.id));
     const unsubJurnal = onSnapshot(qJurnal, (snapshot) => {
       setJurnals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as JurnalItem[]);
       setLoading(false);
     });
 
-    const qRpm = query(collection(db, "rpm"), where("school", "==", user.school));
+    const qRpm = query(collection(db, "rpm"), where("userId", "==", user.id));
     const unsubRpm = onSnapshot(qRpm, (snapshot) => {
       setRpmData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as RPMItem[]);
     });
 
-    const qPromes = query(collection(db, "promes"), where("school", "==", user.school));
+    const qPromes = query(collection(db, "promes"), where("userId", "==", user.id));
     const unsubPromes = onSnapshot(qPromes, (snapshot) => {
       setPromesData(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as PromesItem[]);
     });
 
     return () => { unsubSettings(); unsubYears(); unsubJurnal(); unsubRpm(); unsubPromes(); };
-  }, [user.school]);
+  }, [user.id, user.school]);
 
   const filteredJurnals = useMemo(() => {
     return jurnals
-      .filter(j => j.tahunPelajaran === activeYear && j.kelas === selectedKelas && j.school === user.school)
+      .filter(j => j.tahunPelajaran === activeYear && j.kelas === selectedKelas)
       .sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
-  }, [jurnals, activeYear, selectedKelas, user.school]);
+  }, [jurnals, activeYear, selectedKelas]);
 
   const handleAddRow = async () => {
     try {
@@ -120,15 +122,24 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
       const yearParts = activeYear.split('/');
       const yearStart = parseInt(yearParts[0]);
       const yearEnd = parseInt(yearParts[1]) || yearStart + 1;
+      
       const filteredPromes = promesData.filter(p => 
-        p.kelas === selectedKelas && p.semester === selectedSemester && p.school === user.school && p.bulanPelaksanaan
+        p.userId === user.id && p.kelas === selectedKelas && p.semester === selectedSemester && p.bulanPelaksanaan
       );
+      
       if (filteredPromes.length === 0) {
-        setMessage({ text: 'Tidak ada data Prosem untuk disinkronkan.', type: 'warning' });
+        setMessage({ text: 'Tidak ada data Prosem Anda untuk disinkronkan.', type: 'warning' });
         setIsSyncingPromes(false);
         return;
       }
+
       for (const p of filteredPromes) {
+        // Cari RPM yang sesuai untuk materi ini
+        const matchingRpm = rpmData.find(r => 
+          r.materi.toLowerCase().trim() === p.materiPokok.toLowerCase().trim() && 
+          r.mataPelajaran === p.mataPelajaran
+        );
+
         const dateEntries = p.bulanPelaksanaan.split(',');
         for (const entry of dateEntries) {
           const [bulan, minggu, tanggal] = entry.split('|');
@@ -136,21 +147,35 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
           const monthIndex = monthMap[bulan];
           const year = monthIndex >= 6 ? yearStart : yearEnd;
           const formattedDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(tanggal).padStart(2, '0')}`;
+          
           const isDuplicate = jurnals.some(j => 
             j.tanggal === formattedDate && j.mataPelajaran === p.mataPelajaran && j.materi === p.materiPokok && j.kelas === selectedKelas
           );
+
           if (!isDuplicate) {
+            let detail = `Melaksanakan pembelajaran materi ${p.materiPokok} sesuai Program Semester.`;
+            let model = 'Aktif';
+
+            // Jika ada RPM, ambil langkah-langkah ringkasnya
+            if (matchingRpm) {
+              model = matchingRpm.praktikPedagogis || 'Aktif';
+              const cleanAwal = matchingRpm.kegiatanAwal.replace(/Pertemuan \d+:/gi, '').substring(0, 150);
+              const cleanInti = matchingRpm.kegiatanInti.replace(/Pertemuan \d+:/gi, '').substring(0, 300);
+              detail = `Langkah Awal: ${cleanAwal}... \nLangkah Inti: ${cleanInti}... \nLangkah Penutup: Melakukan refleksi dan evaluasi hasil belajar.`;
+            }
+
             await addDoc(collection(db, "jurnal_harian"), {
               userId: user.id, userName: user.name, tahunPelajaran: activeYear, kelas: selectedKelas, school: user.school,
               tanggal: formattedDate, mataPelajaran: p.mataPelajaran, materi: p.materiPokok,
-              detailKegiatan: `Melaksanakan pembelajaran materi ${p.materiPokok} sesuai rencana pada Prosem.`,
-              praktikPedagogis: 'Aktif', absenSiswa: '', catatanKejadian: ''
+              detailKegiatan: detail,
+              praktikPedagogis: model, 
+              absenSiswa: '', catatanKejadian: ''
             });
             count++;
           }
         }
       }
-      setMessage({ text: `Berhasil mensinkronkan ${count} log jurnal dari Prosem.`, type: 'success' });
+      setMessage({ text: `Berhasil sinkron ${count} log. Detail kegiatan & metode disinkronkan dari RPM Anda.`, type: 'success' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error(err);
@@ -171,14 +196,14 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
     }
     setIsLoadingAI(item.id);
     try {
-      const refRpm = rpmData.find(r => r.materi === item.materi && r.mataPelajaran === item.mataPelajaran);
+      const refRpm = rpmData.find(r => r.materi.trim() === item.materi.trim() && r.mataPelajaran === item.mataPelajaran);
       const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm, user.apiKey);
       if (result) {
         await updateDoc(doc(db, "jurnal_harian", item.id), {
           detailKegiatan: result.detail_kegiatan,
           praktikPedagogis: result.pedagogik
         });
-        setMessage({ text: 'Narasi disusun AI (Flash Mode)!', type: 'success' });
+        setMessage({ text: 'Narasi diringkas dari RPM Anda oleh AI!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (e: any) { setMessage({ text: 'Gagal memanggil AI.', type: 'error' }); } 
@@ -254,7 +279,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
             <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><BookText size={24} /></div>
             <div>
               <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">Jurnal Harian Guru</h2>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Dokumentasi Harian {user.school}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Dokumentasi Harian Personal - {user.school}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -290,7 +315,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
           <div className="flex flex-col justify-end">
              <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center gap-3 text-indigo-600">
                 <Cloud size={20}/>
-                <div><p className="text-[8px] font-black uppercase text-slate-400">Penyimpanan</p><p className="text-[10px] font-black uppercase tracking-widest">Sinkronisasi Cloud Aktif</p></div>
+                <div><p className="text-[8px] font-black uppercase text-slate-400">Privasi Data</p><p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Terisolasi Per User</p></div>
              </div>
           </div>
         </div>
@@ -305,7 +330,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
                 <th className="px-6 py-2 w-48 border-r border-white/5">Hari / Tanggal</th>
                 <th className="px-6 py-2 w-48 border-r border-white/5">Mapel</th>
                 <th className="px-6 py-2 w-64 border-r border-white/5">Topik / Materi</th>
-                <th className="px-6 py-2 border-r border-white/5">Detail Kegiatan</th>
+                <th className="px-6 py-2 border-r border-white/5">Detail Kegiatan (RPM Summary)</th>
                 <th className="px-6 py-2 w-48 border-r border-white/5">Metode / Model</th>
                 <th className="px-6 py-2 w-24 text-center border-r border-white/5">Paraf</th>
                 <th className="px-6 py-2 w-20 text-center">Aksi</th>
@@ -330,13 +355,13 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
                       <textarea className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] font-bold text-slate-800 leading-tight resize-none h-24" value={item.materi} onChange={e => updateJurnal(item.id, 'materi', e.target.value)} placeholder="Materi hari ini..." />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 relative">
-                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[11px] font-medium text-slate-600 leading-relaxed resize-none p-0 min-h-[100px]" value={item.detailKegiatan} onChange={e => updateJurnal(item.id, 'detailKegiatan', e.target.value)} placeholder="Tulis rincian..." />
-                       <button onClick={() => handleGenerateNarrative(item)} disabled={isLoadingAI === item.id} className="absolute bottom-4 right-4 bg-indigo-600 text-white p-2.5 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all">
+                       <textarea className="w-full bg-transparent border-none focus:ring-0 text-[11px] font-medium text-slate-600 leading-relaxed resize-none p-0 min-h-[100px]" value={item.detailKegiatan} onChange={e => updateJurnal(item.id, 'detailKegiatan', e.target.value)} placeholder="Tulis rincian atau sinkronkan dari RPM..." />
+                       <button onClick={() => handleGenerateNarrative(item)} title="Ringkas dari RPM dengan AI" disabled={isLoadingAI === item.id} className="absolute bottom-4 right-4 bg-indigo-600 text-white p-2.5 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all">
                          {isLoadingAI === item.id ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16}/>}
                        </button>
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50">
-                       <input className="w-full bg-white border border-slate-200 rounded-lg p-2 text-[10px] font-bold" value={item.praktikPedagogis} onChange={e => updateJurnal(item.id, 'praktikPedagogis', e.target.value)} placeholder="Model..." />
+                       <input className="w-full bg-white border border-slate-200 rounded-lg p-2 text-[10px] font-bold" value={item.praktikPedagogis} onChange={e => updateJurnal(item.id, 'praktikPedagogis', e.target.value)} placeholder="Model (cth: PBL, Aktif)..." />
                     </td>
                     <td className="px-6 py-6 border-r border-slate-50 text-center">
                        <div className="w-12 h-12 bg-slate-50 rounded-lg mx-auto border border-dashed border-slate-200"></div>
@@ -355,7 +380,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
       {isPrintMode && (
         <div className="fixed inset-0 bg-white z-[300] p-10 overflow-y-auto">
           <div className="no-print mb-8 flex justify-between bg-slate-100 p-4 rounded-2xl border border-slate-200">
-             <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-8 py-2 rounded-xl text-xs font-black">KEMBALI</button>
+             <button onClick={() => setIsPrintMode(false)} className="bg-slate-800 text-white px-8 py-2 rounded-xl text-xs font-black shadow-xl">KEMBALI KE EDITOR</button>
              <button onClick={handlePrint} className="bg-rose-600 text-white px-8 py-2 rounded-xl text-xs font-black shadow-lg flex items-center gap-2"><Printer size={16}/> CETAK SEKARANG</button>
           </div>
           <div ref={printRef}>
@@ -373,7 +398,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
                    <th className="w-32">Hari / Tanggal</th>
                    <th className="w-32">Mapel</th>
                    <th className="w-40">Topik / Materi</th>
-                   <th>Detail Kegiatan</th>
+                   <th>Detail Kegiatan Pembelajaran</th>
                    <th className="w-32">Metode / Model</th>
                    <th className="w-16">Paraf</th>
                  </tr>
@@ -385,13 +410,13 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
                      <td className="text-center">{new Date(j.tanggal).toLocaleDateString('id-ID', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}</td>
                      <td className="text-center uppercase">{j.mataPelajaran}</td>
                      <td className="font-bold">{j.materi}</td>
-                     <td className="text-justify leading-relaxed">{j.detailKegiatan}</td>
+                     <td className="text-justify leading-relaxed whitespace-pre-wrap">{j.detailKegiatan}</td>
                      <td className="text-center">{j.praktikPedagogis}</td>
                      <td></td>
                    </tr>
                  ))}
                  {filteredJurnals.length === 0 && (
-                   <tr><td colSpan={7} className="text-center py-10 italic">Tidak ada data.</td></tr>
+                   <tr><td colSpan={7} className="text-center py-10 italic">Tidak ada data untuk dicetak.</td></tr>
                  )}
                </tbody>
              </table>

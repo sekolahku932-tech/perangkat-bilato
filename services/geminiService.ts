@@ -30,15 +30,12 @@ const cleanAndParseJson = (str: any): any => {
   }
 };
 
-const getAiClient = (providedApiKey?: string) => {
-  const finalKey = (providedApiKey && providedApiKey.trim() !== "") 
-    ? providedApiKey.trim() 
-    : (process.env.API_KEY || "");
-  return new GoogleGenAI({ apiKey: finalKey });
+const getAiClient = (_apiKey?: string) => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 };
 
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
-const COMPLEX_MODEL = 'gemini-3-flash-preview'; 
+const COMPLEX_MODEL = 'gemini-3-pro-preview'; 
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 
 export const startAIChat = async (systemInstruction: string, apiKey?: string) => {
@@ -68,21 +65,16 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
   CP: "${cpContent}" 
   Elemen: "${elemen}"
   
-  TUGAS:
-  1. Pecah CP tersebut menjadi beberapa Tujuan Pembelajaran (TP) yang spesifik dan terukur.
-  2. Tentukan Materi Pokok dan Sub Materi untuk setiap TP.
-  3. Lakukan analisis karakter: Pilih 1-3 Dimensi Profil Lulusan yang paling relevan untuk setiap TP HANYA dari 8 daftar berikut:
-     - Keimanan dan Ketakwaan
-     - Kewargaan
-     - Penalaran Kritis
-     - Kreativitas
-     - Kolaborasi
-     - Kemandirian
-     - Kesehatan
-     - Komunikasi`;
+  TUGAS UTAMA:
+  1. Pecah CP tersebut menjadi beberapa Tujuan Pembelajaran (TP) yang SANGAT RINCI dan TERUKUR.
+  2. RUMUSAN TP WAJIB mengandung 2 aspek fundamental: 
+     a. KOMPETENSI: Kata kerja operasional (C1-C6) yang dapat diobservasi dan diukur.
+     b. LINGKUP MATERI: Konten atau konsep utama yang dipelajari.
+  3. Tentukan Materi Pokok dan Sub Materi yang relevan for setiap TP.
+  4. Lakukan analisis karakter: Pilih 1-3 'Dimensi Profil Lulusan' (DPL) yang paling relevan.`;
 
   const response = await ai.models.generateContent({
-    model: DEFAULT_MODEL,
+    model: COMPLEX_MODEL,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -93,7 +85,7 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
             materi: { type: Type.STRING },
             subMateri: { type: Type.STRING },
             tp: { type: Type.STRING },
-            profilLulusan: { type: Type.STRING, description: "1-3 dimensi dari daftar resmi, pisahkan dengan koma." }
+            profilLulusan: { type: Type.STRING }
           },
           required: ['materi', 'subMateri', 'tp', 'profilLulusan']
         }
@@ -108,21 +100,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
   const ai = getAiClient(apiKey);
   const prompt = `Lengkapi rincian Alur Tujuan Pembelajaran (ATP) SD Kelas ${kelas}.
   Tujuan Pembelajaran (TP): "${tp}"
-  Materi Utama: "${materi}"
-  
-  TUGAS KHUSUS DIMENSI PROFIL LULUSAN:
-  Lakukan analisis mendalam terhadap kompetensi yang dituju oleh TP ini.
-  Pilih 1-3 item yang paling relevan HANYA dari 8 Dimensi Profil Lulusan berikut:
-  1. Keimanan dan Ketakwaan
-  2. Kewargaan
-  3. Penalaran Kritis
-  4. Kreativitas
-  5. Kolaborasi
-  6. Kemandirian
-  7. Kesehatan
-  8. Komunikasi
-
-  Sajikan juga rincian Alur Tujuan (ATP), Alokasi Waktu (JP), rancangan Asesmen (Awal, Proses, Akhir), dan Sumber Belajar.`;
+  Materi Utama: "${materi}"`;
 
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
@@ -133,10 +111,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
         properties: {
           alurTujuan: { type: Type.STRING },
           alokasiWaktu: { type: Type.STRING },
-          dimensiOfProfil: { 
-            type: Type.STRING, 
-            description: "Hasil analisis: 1-3 dari 8 dimensi resmi. Pisahkan dengan koma." 
-          },
+          dimensiOfProfil: { type: Type.STRING },
           asesmenAwal: { type: Type.STRING },
           asesmenProses: { type: Type.STRING },
           asesmenAkhir: { type: Type.STRING },
@@ -167,23 +142,12 @@ export const recommendPedagogy = async (tp: string, alurAtp: string, materi: str
 
 export const generateRPMContent = async (tp: string, materi: string, kelas: string, praktikPedagogis: string, alokasiWaktu: string, jumlahPertemuan: number = 1, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Susun RPM SD Kelas ${kelas} untuk TOTAL ${jumlahPertemuan} pertemuan.
-  TP: "${tp}"
-  MATERI: "${materi}"
+  const prompt = `Susun narasi Rencana Pembelajaran Mendalam (RPM) untuk TOTAL ${jumlahPertemuan} pertemuan.
+  TUJUAN PEMBELAJARAN: "${tp}"
+  MATERI UTAMA: "${materi}"
   MODEL: ${praktikPedagogis}
   
-  INSTRUKSI KHUSUS LANGKAH PEMBELAJARAN (WAJIB):
-  1. Sajikan langkah pembelajaran dalam rincian butir-butir bernomor (1., 2., 3., dst) yang berurut ke bawah secara vertikal.
-  2. SETIAP SATU BUTIR langkah harus berupa kalimat naratif yang PANJANG and DESKRIPTIF (min 20 kata).
-  3. DI AKHIR SETIAP KALIMAT langkah, Anda WAJIB menyertakan salah satu label filosofi berikut: [Bermakna], [Menggembirakan], atau [Berkesadaran] (Pilih yang paling sesuai dengan aktivitasnya).
-  4. Gunakan label "Pertemuan 1:", "Pertemuan 2:", dst untuk memisahkan sesi jika jumlahPertemuan > 1 di dalam kolom teks.
-  5. JANGAN menuliskan kembali judul bagian (seperti "I. MEMAHAMI") di dalam teks isi.
-  
-  CONTOH FORMAT HASIL:
-  Pertemuan 1:
-  1. Guru mengajak siswa mengamati lingkungan sekitar sekolah untuk menemukan contoh nyata dari materi yang sedang dipelajari agar siswa memahami relevansinya dalam kehidupan sehari-hari. [Bermakna]
-  2. Siswa secara berkelompok melakukan simulasi peran dengan antusiasme tinggi melalui permainan edukatif yang dirancang khusus untuk memperdalam pemahaman konsep secara seru. [Menggembirakan]
-  3. Guru memberikan waktu hening sejenak bagi siswa untuk merefleksikan apa yang telah mereka rasakan dan pelajari hari ini guna menumbuhkan ketenangan batin. [Berkesadaran]`;
+  WAJIB gunakan label "Pertemuan 1:", "Pertemuan 2:", dst.`;
 
   const response = await ai.models.generateContent({
     model: COMPLEX_MODEL,
@@ -195,9 +159,9 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
           kemitraan: { type: Type.STRING },
           lingkunganBelajar: { type: Type.STRING },
           pemanfaatanDigital: { type: Type.STRING },
-          kegiatanAwal: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
-          kegiatanInti: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" },
-          kegiatanPenutup: { type: Type.STRING, description: "Wajib label Pertemuan X:, butir bernomor, and akhiri [Bermakna]/[Menggembirakan]/[Berkesadaran]" }
+          kegiatanAwal: { type: Type.STRING },
+          kegiatanInti: { type: Type.STRING },
+          kegiatanPenutup: { type: Type.STRING }
         }
       }
     },
@@ -208,36 +172,47 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
 
 export const generateJournalNarrative = async (kelas: string, mapel: string, materi: string, refRpm?: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  let contextPrompt = `Tulis narasi log jurnal harian mengajar untuk SD Kelas ${kelas}, Mapel ${mapel}, Materi ${materi}.`;
+  
+  if (refRpm) {
+    contextPrompt += `
+    BERIKUT ADALAH REFERENSI RPM (Rencana Pembelajaran Mendalam):
+    Model: ${refRpm.praktikPedagogis}
+    Kegiatan Awal: ${refRpm.kegiatanAwal}
+    Kegiatan Inti: ${refRpm.kegiatanInti}
+    Kegiatan Penutup: ${refRpm.kegiatanPenutup}
+    
+    TUGAS:
+    Ringkas langkah-langkah di atas menjadi 1 paragraf narasi detail kegiatan yang mencakup elemen Awal, Inti, dan Penutup secara padat (summary).
+    Pastikan 'pedagogik' sesuai dengan Model pada RPM.`;
+  }
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
-        properties: { detail_kegiatan: { type: Type.STRING }, pedagogik: { type: Type.STRING } }
+        properties: { 
+          detail_kegiatan: { type: Type.STRING, description: "Ringkasan narasi langkah pembelajaran" }, 
+          pedagogik: { type: Type.STRING, description: "Nama model/metode pembelajaran" } 
+        }
       }
     },
-    contents: `Buat jurnal harian: Kelas ${kelas}, Mapel ${mapel}, Materi ${materi}.`,
+    contents: contextPrompt,
   });
   return cleanAndParseJson(response.text);
 };
 
 export const generateAssessmentDetails = async (tp: string, materi: string, kelas: string, stepsContext: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const prompt = `Susun instrumen asesmen lengkap (Awal, Proses, Akhir) untuk SD Kelas ${kelas}.
+  const prompt = `Susun instrumen asesmen lengkap untuk SD Kelas ${kelas}.
   TP: "${tp}"
   MATERI: "${materi}"
-  
-  CONTEXT LANGKAH PEMBELAJARAN:
-  "${stepsContext}"
-  
-  INSTRUKSI:
-  1. Asesmen harus selaras dengan narasi butir aktivitas di atas.
-  2. ASESMEN PROSES (Formatif) harus mengukur aktivitas spesifik dalam langkah.
-  3. Gunakan teknik dan bentuk yang variatif sesuai Kurikulum Merdeka.`;
+  CONTEXT: "${stepsContext}"`;
 
   const response = await ai.models.generateContent({
-    model: DEFAULT_MODEL,
+    model: COMPLEX_MODEL,
     config: { 
       responseMimeType: "application/json",
       responseSchema: {
@@ -245,7 +220,7 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
         items: {
           type: Type.OBJECT,
           properties: {
-            kategori: { type: Type.STRING, description: "ASESMEN AWAL, ASESMEN PROSES, atau ASESMEN AKHIR" },
+            kategori: { type: Type.STRING },
             teknik: { type: Type.STRING },
             bentuk: { type: Type.STRING },
             instruksi: { type: Type.STRING },
@@ -274,6 +249,24 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
 
 export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const jumlah = rpm.jumlahPertemuan || 1;
+  const prompt = `Bertindaklah sebagai pengembang bahan ajar SD. Susun Lembar Kerja Peserta Didik (LKPD) yang SINKRON dengan rincian langkah pada RPM berikut for TOTAL ${jumlah} pertemuan:
+  
+  TP: "${rpm.tujuanPembelajaran}"
+  MATERI: "${rpm.materi}"
+  LANGKAH RPM: 
+  Awal: ${rpm.kegiatanAwal}
+  Inti: ${rpm.kegiatanInti}
+  Penutup: ${rpm.kegiatanPenutup}
+
+  INSTRUKSI TEKNIS:
+  1. Anda WAJIB menyusun konten untuk SELURUH ${jumlah} pertemuan secara detail.
+  2. Untuk kolom 'materiRingkas', 'langkahKerja', dan 'tugasMandiri', gunakan label pemisah "Pertemuan 1:", "Pertemuan 2:", dst.
+  3. Materi ringkas harus berisi poin penting yang akan dipelajari di pertemuan tersebut.
+  4. Langkah kerja harus berisi instruksi tugas praktis untuk siswa (sinkron dengan Langkah Inti di RPM).
+  5. Tantangan Mandiri harus berisi 1-3 tugas kreatif untuk dikerjakan siswa.
+  6. Gunakan bahasa ramah anak SD.`;
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
     config: { 
@@ -283,44 +276,68 @@ export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
         properties: {
           petunjuk: { type: Type.STRING },
           alatBahan: { type: Type.STRING },
-          materiRingkas: { type: Type.STRING },
-          langkahKerja: { type: Type.STRING },
-          tugasMandiri: { type: Type.STRING },
+          materiRingkas: { type: Type.STRING, description: "Rincian materi dipisah per pertemuan dengan label Pertemuan X:" },
+          langkahKerja: { type: Type.STRING, description: "Langkah tugas dipisah per pertemuan dengan label Pertemuan X:" },
+          tugasMandiri: { type: Type.STRING, description: "Tantangan tugas dipisah per pertemuan dengan label Pertemuan X:" },
           refleksi: { type: Type.STRING }
         }
       }
     },
-    contents: `Buat LKPD Sinkron RPM: "${rpm.tujuanPembelajaran}"`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };
 
 export const generateIndikatorSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Buat 1 baris indikator soal AKM yang spesifik untuk SD Kelas ${item.kelas} berdasarkan Tujuan Pembelajaran berikut: "${item.tujuanPembelajaran}".
+  
+  ATURAN PENULISAN WAJIB:
+  Gunakan format: "Disajikan [Teks/Bacaan/Tabel/Gambar], siswa dapat [Kompetensi/Tujuan yang ingin diukur]".
+  
+  Contoh: "Disajikan sebuah paragraf tentang ekosistem, siswa dapat mengidentifikasi peran produsen dalam rantai makanan dengan tepat."
+  
+  Hanya berikan teks indikatornya saja tanpa penjelasan tambahan.`;
+
   const response = await ai.models.generateContent({
     model: DEFAULT_MODEL,
-    contents: `Buat indikator soal AKM Kelas ${item.kelas}: "${item.tujuanPembelajaran}"`
+    contents: prompt
   });
   return response.text || "";
 };
 
 export const generateButirSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
+  const prompt = `Susunlah sebuah butir soal asesmen SD Kelas ${item.kelas} yang sejalan dengan Indikator Soal berikut: "${item.indikatorSoal}".
+  
+  INSTRUKSI:
+  1. Buat stimulus berupa teks bacaan, data tabel, atau deskripsi gambar jika indikator memintanya.
+  2. Susun pertanyaan yang menantang (HOTS) sesuai level kognitif indikator.
+  3. Sertakan kunci jawaban yang benar.
+  4. Bentuk soal saat ini adalah: ${item.bentukSoal}.
+  
+  KHUSUS BENTUK "MENJODOHKAN":
+  Wajib gunakan format tabel markdown seperti ini untuk bagian soal:
+  | Kolom Kiri | | Kolom Kanan |
+  | Mewarnai | | me war na i |
+  | Komodo | | ko mo do |
+  dst...`;
+
   const response = await ai.models.generateContent({
-    model: DEFAULT_MODEL,
+    model: COMPLEX_MODEL,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          stimulus: { type: Type.STRING },
-          soal: { type: Type.STRING },
-          kunci: { type: Type.STRING }
+          stimulus: { type: Type.STRING, description: "Teks bacaan, data tabel, atau narasi gambar pendukung soal" },
+          soal: { type: Type.STRING, description: "Pertanyaan dan pilihan jawaban (Wajib gunakan format tabel | untuk Menjodohkan)" },
+          kunci: { type: Type.STRING, description: "Kunci jawaban benar" }
         },
         required: ["soal", "kunci"]
       }
     },
-    contents: `Buat soal untuk indikator: "${item.indikatorSoal}"`,
+    contents: prompt,
   });
   return cleanAndParseJson(response.text);
 };

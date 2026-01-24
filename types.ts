@@ -29,7 +29,7 @@ export interface User {
   kelas: string;
   school: string;
   mapelDiampu: string[];
-  apiKey?: string; // Menambahkan kembali properti API Key
+  apiKey?: string;
 }
 
 export interface Siswa {
@@ -56,6 +56,7 @@ export interface ChatMessage {
 
 export interface AsesmenNilai {
   id: string;
+  userId: string;
   siswaId: string;
   tpId: string;
   nilai: number;
@@ -65,6 +66,7 @@ export interface AsesmenNilai {
 
 export interface AsesmenInstrumen {
   id: string;
+  userId: string;
   fase: Fase;
   kelas: Kelas;
   mataPelajaran: string;
@@ -92,6 +94,7 @@ export interface JurnalItem {
 
 export interface KisiKisiItem {
   id: string;
+  userId: string;
   fase: Fase;
   kelas: Kelas;
   semester: '1' | '2';
@@ -105,7 +108,7 @@ export interface KisiKisiItem {
   indikatorSoal: string;
   jenis: 'Tes' | 'Non Tes';
   bentukSoal: string;
-  subBentukSoal?: 'Multiple Answer' | 'Grid'; // Sub-tipe PG Kompleks
+  subBentukSoal?: 'Multiple Choice' | 'Benar Salah' | 'Setuju Tidak Setuju' | 'Ya Tidak' | 'Grid';
   stimulus: string;
   stimulusImage?: string; 
   soal: string;
@@ -166,20 +169,24 @@ export interface CapaianPembelajaran {
 
 export interface AnalisisCP {
   id: string;
+  userId: string;
   cpId: string;
+  kodeCP: string;
   fase: Fase;
   kelas: Kelas;
   mataPelajaran: string;
   materi: string;
   subMateri: string;
   tujuanPembelajaran: string;
-  profilLulusan: string; // Added field
+  profilLulusan: string; 
   indexOrder: number;
   school: string;
 }
 
 export interface ATPItem {
   id: string;
+  userId: string;
+  kodeCP: string; 
   fase: Fase;
   kelas: Kelas;
   mataPelajaran: string;
@@ -201,6 +208,9 @@ export interface ATPItem {
 
 export interface ProtaItem {
   id: string;
+  userId: string;
+  atpId?: string; // Menghubungkan ke ATP
+  kodeCP: string; 
   fase: Fase;
   kelas: Kelas;
   mataPelajaran: string;
@@ -215,6 +225,9 @@ export interface ProtaItem {
 
 export interface PromesItem {
   id: string;
+  userId: string;
+  atpId?: string; // Menghubungkan ke ATP
+  kodeCP: string; 
   fase: Fase;
   kelas: Kelas;
   semester: '1' | '2';
@@ -232,6 +245,7 @@ export interface PromesItem {
 
 export interface RPMItem {
   id: string;
+  userId: string;
   atpId: string;
   fase: Fase;
   kelas: Kelas;
@@ -259,6 +273,7 @@ export interface RPMItem {
 
 export interface LKPDItem {
   id: string;
+  userId: string;
   rpmId: string;
   fase: Fase;
   kelas: Kelas;

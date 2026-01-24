@@ -1,4 +1,3 @@
-
 // @google/genai is not used directly here, but it's part of the global project context.
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HariEfektif, SchoolSettings, AcademicYear, MATA_PELAJARAN, SEMUA_AKTIVITAS, EventKalender, JadwalItem, Kelas, User } from '../types';
@@ -6,7 +5,7 @@ import {
   CalendarDays, Save, Printer, Eye, EyeOff, Info, Calculator, FileText, 
   ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, 
   Tag, Clock, Layout, GraduationCap, Loader2, Cloud, RefreshCw, 
-  AlertTriangle, X, CheckCircle2, Lock, Wand2, Edit2 
+  AlertTriangle, X, CheckCircle2, Lock, Wand2, Edit2, BarChart3, Target, CalendarRange
 } from 'lucide-react';
 import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, setDoc } from '../services/firebase';
 
@@ -25,7 +24,7 @@ interface HariEfektifManagerProps {
 }
 
 const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'RINCIAN' | 'KALENDER' | 'JADWAL'>('RINCIAN');
+  const [activeTab, setActiveTab] = useState<'RINCIAN' | 'KALENDER' | 'JADWAL' | 'ANALISIS_JAM'>('RINCIAN');
   const [semester, setSemester] = useState<1 | 2>(1);
   const [jpPerMinggu, setJpPerMinggu] = useState<number>(0);
   
@@ -114,6 +113,56 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
   const totalTidakEfektif = filteredData.reduce((acc, curr) => acc + (curr.mingguTidakEfektif || 0), 0);
   const totalEfektif = totalMinggu - totalTidakEfektif;
   const totalJP = totalEfektif * jpPerMinggu;
+
+  // Analisis Jam Mengajar Berdasarkan Kalender & Jadwal
+  const analisisJamEfektif = useMemo(() => {
+    const yearParts = activeYear.split('/');
+    const yearStart = parseInt(yearParts[0]);
+    const yearEnd = parseInt(yearParts[1]) || yearStart + 1;
+    const bulanList = semester === 1 ? BULAN_SEM_1 : BULAN_SEM_2;
+    
+    // 1. Get schedule for this mapel & class
+    const subjectSchedule = jadwal.filter(j => j.kelas === selectedKelas && j.mapel === mapel);
+    const teachingDayMap: Record<string, number> = {};
+    subjectSchedule.forEach(s => {
+      teachingDayMap[s.hari] = (teachingDayMap[s.hari] || 0) + 1;
+    });
+
+    // 2. Loop through months and dates
+    const monthlyBreakdown: { bulan: string; sessions: number; totalJP: number; dates: string[] }[] = [];
+    
+    bulanList.forEach(bulan => {
+      const monthIndex = MONTH_MAP[bulan];
+      // Jika bulan >= Juli (index 6), gunakan yearStart, jika Januari-Juni (index 0-5), gunakan yearEnd
+      const year = monthIndex >= 6 ? yearStart : yearEnd;
+      let monthSessions = 0;
+      let monthJP = 0;
+      const sessionDates: string[] = [];
+
+      const d = new Date(year, monthIndex, 1);
+      while (d.getMonth() === monthIndex) {
+        const dayName = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][d.getDay()];
+        const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        
+        const hasTeaching = teachingDayMap[dayName];
+        // FIX: Periksa semua tipe event (libur, ujian, kegiatan, penting) untuk memblokir jam efektif
+        const isBlocked = events.some(e => e.date === dateStr);
+
+        if (hasTeaching && !isBlocked) {
+          monthSessions++;
+          monthJP += hasTeaching;
+          sessionDates.push(`${d.getDate()}`);
+        }
+        d.setDate(d.getDate() + 1);
+      }
+
+      monthlyBreakdown.push({ bulan, sessions: monthSessions, totalJP: monthJP, dates: sessionDates });
+    });
+
+    return monthlyBreakdown;
+  }, [activeYear, semester, jadwal, selectedKelas, mapel, events]);
+
+  const totalAnalisisJP = analisisJamEfektif.reduce((acc, curr) => acc + curr.totalJP, 0);
 
   const handleUpdateRincian = async (bulan: string, field: keyof HariEfektif, value: any) => {
     const existing = data.find(d => d.kelas === selectedKelas && d.semester === semester && d.bulan === bulan);
@@ -213,7 +262,6 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
       type: event.type
     });
     setEditingEventId(event.id);
-    // Scroll view to date if needed or just let user see form
   };
 
   const handleCancelEdit = () => {
@@ -354,13 +402,13 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
     return (
       <div className={`bg-white rounded-[32px] overflow-hidden ${isPrint ? 'border-2 border-black' : 'shadow-xl border border-slate-200'}`}>
         {!isPrint && (
-          <div className={`p-6 ${editingEventId ? 'bg-amber-600' : 'bg-slate-900'} text-white flex justify-between items-center transition-colors`}>
+          <div className={`p-6 ${editingEventId ? 'bg-amber-600' : 'bg-slate-900'} text-white flex flex-col md:flex-row justify-between items-center gap-4 transition-colors`}>
             <div className="flex items-center gap-4">
               <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 hover:bg-white/10 rounded-xl"><ChevronLeft size={20}/></button>
               <h3 className="text-sm font-black uppercase tracking-widest">{new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(currentDate)}</h3>
               <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 hover:bg-white/10 rounded-xl"><ChevronRight size={20}/></button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 justify-center">
               <input type="date" className="bg-slate-800 text-white text-[10px] rounded-xl border-none w-32 outline-none focus:ring-2 focus:ring-blue-500" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
               <input type="text" placeholder="Agenda..." className="bg-slate-800 text-white text-[10px] px-4 py-2 rounded-xl border-none w-48 outline-none focus:ring-2 focus:ring-blue-500" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
               <select className="bg-slate-800 text-white text-[10px] rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-500 px-2" value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}>
@@ -452,6 +500,104 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
     );
   };
 
+  const renderAnalisisJam = () => {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Calculator size={24}/></div>
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Kalkulator Jam Efektif Riil</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Pilih Mata Pelajaran</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-black outline-none focus:ring-2 focus:ring-emerald-500" value={mapel} onChange={e => setMapel(e.target.value)}>
+                    {MATA_PELAJARAN.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="w-full sm:w-48">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Pilih Semester</label>
+                  <select className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl p-4 text-xs font-black outline-none focus:ring-2 focus:ring-indigo-500" value={semester} onChange={e => setSemester(parseInt(e.target.value) as 1 | 2)}>
+                    <option value="1">Semester 1 (Ganjil)</option>
+                    <option value="2">Semester 2 (Genap)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-4">
+                <Info size={20} className="text-emerald-600"/>
+                <p className="text-[10px] font-bold text-emerald-700 uppercase leading-relaxed">Sistem menghitung total jam pelajaran (JP) dengan memindai kalender pendidikan dan melewati hari libur, ujian, kegiatan, dan agenda penting sesuai jadwal mingguan Anda.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-8 rounded-[32px] text-white flex flex-col justify-center relative overflow-hidden shadow-xl">
+             <div className="absolute top-0 right-0 p-8 opacity-10"><BarChart3 size={150}/></div>
+             <div className="relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">Total Jam Pelajaran - Sem {semester}</p>
+                <h2 className="text-6xl font-black tracking-tighter mb-4">{totalAnalisisJP} <span className="text-xl text-indigo-300">JP</span></h2>
+                <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full w-fit">
+                   <CheckCircle2 size={14} className="text-emerald-400"/>
+                   <span className="text-[10px] font-black uppercase tracking-widest">Tersinkronisasi Kalender & Jadwal</span>
+                </div>
+             </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[40px] border border-slate-200 shadow-xl overflow-hidden">
+          <div className="p-6 bg-slate-50 border-b flex items-center justify-between">
+             <div className="flex items-center gap-3">
+                <CalendarRange size={20} className="text-indigo-600"/>
+                <h3 className="text-xs font-black uppercase tracking-widest">Rincian Perhitungan Bulanan: {mapel} (Semester {semester})</h3>
+             </div>
+             <div className="bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">
+               {semester === 1 ? 'JULI - DESEMBER' : 'JANUARI - JUNI'}
+             </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-white text-[10px] font-black h-12 uppercase tracking-widest">
+                  <th className="px-8 py-2 border-r border-white/5">Bulan</th>
+                  <th className="px-6 py-2 text-center border-r border-white/5">Jumlah Pertemuan</th>
+                  <th className="px-6 py-2 border-r border-white/5">Tanggal Terlaksana (Efektif)</th>
+                  <th className="px-8 py-2 text-center">Total JP Riil</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {analisisJamEfektif.map(item => (
+                  <tr key={item.bulan} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-8 py-6 font-black text-slate-800 uppercase text-xs">{item.bulan}</td>
+                    <td className="px-6 py-6 text-center font-black text-indigo-600 bg-indigo-50/20">{item.sessions} Sesi</td>
+                    <td className="px-6 py-6">
+                       <div className="flex flex-wrap gap-1.5">
+                          {item.dates.length > 0 ? item.dates.map(d => (
+                            <span key={d} className="px-2 py-0.5 bg-slate-100 border rounded font-bold text-[10px] text-slate-600">{d}</span>
+                          )) : <span className="text-[10px] italic text-slate-300">Tidak ada jadwal aktif</span>}
+                       </div>
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                       <span className="inline-block px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-lg">
+                          {item.totalJP} JP
+                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-900 text-white">
+                <tr>
+                  <td colSpan={3} className="px-8 py-6 text-right font-black uppercase text-xs tracking-widest">Jumlah Total Jam Pelajaran (JP) Semester {semester}</td>
+                  <td className="px-8 py-6 text-center text-2xl font-black text-indigo-400 bg-black/20">{totalAnalisisJP} JP</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {notification && (
@@ -462,10 +608,11 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
       )}
 
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col lg:flex-row justify-between items-center gap-6">
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-          <button onClick={() => setActiveTab('RINCIAN')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'RINCIAN' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>RINCIAN HARI EFEKTIF</button>
-          <button onClick={() => setActiveTab('KALENDER')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'KALENDER' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>KALENDER PENDIDIKAN</button>
-          <button onClick={() => setActiveTab('JADWAL')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'JADWAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>JADWAL MINGGUAN</button>
+        <div className="flex flex-wrap bg-slate-100 p-1 rounded-2xl border border-slate-200">
+          <button onClick={() => setActiveTab('RINCIAN')} className={`px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all ${activeTab === 'RINCIAN' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>RINGKASAN EFEKTIF</button>
+          <button onClick={() => setActiveTab('KALENDER')} className={`px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all ${activeTab === 'KALENDER' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>KALENDER PENDIDIKAN</button>
+          <button onClick={() => setActiveTab('JADWAL')} className={`px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all ${activeTab === 'JADWAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>JADWAL MINGGUAN</button>
+          <button onClick={() => setActiveTab('ANALISIS_JAM')} className={`px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all ${activeTab === 'ANALISIS_JAM' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>ANALISIS JAM PELAJARAN</button>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-black shadow-lg"><Printer size={16}/> PRATINJAU & CETAK</button>
@@ -530,6 +677,7 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
 
       {activeTab === 'KALENDER' && renderCalendar()}
       {activeTab === 'JADWAL' && renderJadwal()}
+      {activeTab === 'ANALISIS_JAM' && renderAnalisisJam()}
 
       {isPrintMode && (
         <div className="fixed inset-0 bg-white z-[300] overflow-y-auto p-12 font-serif text-black">
@@ -579,6 +727,33 @@ const HariEfektifManager: React.FC<HariEfektifManagerProps> = ({ user }) => {
               <>
                 {renderPrintHeader("Jadwal Pelajaran Mingguan")}
                 {renderJadwal(true)}
+              </>
+            )}
+            {activeTab === 'ANALISIS_JAM' && (
+              <>
+                {renderPrintHeader(`Analisis Jam Efektif: ${mapel}`)}
+                <div className="mb-6 p-4 border border-black bg-slate-50 text-[10px] font-bold uppercase leading-relaxed">
+                   Berikut adalah rincian jam pelajaran yang tersedia secara riil setelah dikurangi agenda libur, ujian, kegiatan, dan agenda penting yang terdaftar di kalender pendidikan sekolah. (Semester {semester})
+                </div>
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="bg-slate-100 uppercase font-black text-center">
+                      <th className="w-10">No</th><th>Bulan</th><th className="w-32">Jumlah Sesi</th><th className="w-32">JP Terlaksana</th><th className="text-left px-4">Daftar Tanggal Aktif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analisisJamEfektif.map((item, idx) => (
+                      <tr key={item.bulan} className="text-center h-10">
+                         <td>{idx + 1}</td><td className="text-left px-4 font-bold">{item.bulan}</td><td>{item.sessions}</td><td className="font-black">{item.totalJP} JP</td><td className="text-left px-4">{item.dates.join(', ') || '-'}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-900 text-white font-black">
+                      <td colSpan={3} className="px-4 text-right uppercase">Total Jam Pelajaran Efektif (Sem {semester})</td>
+                      <td>{totalAnalisisJP} JP</td>
+                      <td className="text-left px-4 italic">Jam Riil Per Semester</td>
+                    </tr>
+                  </tbody>
+                </table>
               </>
             )}
             {renderSignature()}

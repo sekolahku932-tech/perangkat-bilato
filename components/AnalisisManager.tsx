@@ -97,12 +97,6 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
       .sort((a, b) => (a.kode || '').localeCompare(b.kode || '', undefined, { numeric: true, sensitivity: 'base' }));
   }, [cps, filterFase, filterMapel]);
 
-  const cpLookup = useMemo(() => {
-    const map: Record<string, string> = {};
-    cps.forEach(c => map[c.id] = c.deskripsi);
-    return map;
-  }, [cps]);
-
   const handleAnalyze = async (cp: CapaianPembelajaran) => {
     if (!user.apiKey) {
       setMessage({ text: '⚠️ Gagal: API Key belum diisi di profil Anda!', type: 'warning' });
@@ -119,18 +113,19 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
           await addDoc(collection(db, "analisis"), {
             userId: user.id,
             cpId: cp.id,
+            kodeCP: cp.kode, // MENYIMPAN KODE CP
             fase: filterFase,
             kelas: filterKelas,
             mataPelajaran: filterMapel,
             materi: res.materi,
             subMateri: res.subMateri || '',
             tujuanPembelajaran: res.tp,
-            profilLulusan: res.profilLulusan || '', // AI-driven analysis
+            profilLulusan: res.profilLulusan || '', // AI-driven DPL analysis
             indexOrder: lastOrder,
             school: user.school
           });
         }
-        setMessage({ text: 'Analisis AI Berhasil termasuk Profil Lulusan!', type: 'success' });
+        setMessage({ text: 'Analisis AI Berhasil: TP Dirinci & Kode CP Disinkron!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (error: any) {
@@ -192,9 +187,10 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
             <thead>
               <tr className="bg-slate-50">
                 <th className="border-2 border-black px-2 py-3 w-10 text-center">NO</th>
+                <th className="border-2 border-black px-2 py-3 w-16 text-center">KODE</th>
                 <th className="border-2 border-black px-3 py-3 text-left w-64">CAPAIAN PEMBELAJARAN (CP)</th>
-                <th className="border-2 border-black px-3 py-3 text-left w-48">MATERI & PROFIL LULUSAN</th>
-                <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN (TP)</th>
+                <th className="border-2 border-black px-3 py-3 text-left w-48">MATERI & DIMENSI PROFIL</th>
+                <th className="border-2 border-black px-3 py-3 text-left">TUJUAN PEMBELAJARAN (TP) - TERURAI</th>
               </tr>
             </thead>
             <tbody>
@@ -203,20 +199,21 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
                 return (
                   <tr key={item.id} className="break-inside-avoid">
                     <td className="border-2 border-black p-3 text-center font-bold">{idx + 1}</td>
+                    <td className="border-2 border-black p-3 text-center font-black uppercase">{item.kodeCP || cpData?.kode || '-'}</td>
                     <td className="border-2 border-black p-3 text-justify leading-relaxed italic text-slate-600">
                       <span className="font-black text-slate-900 not-italic block mb-1">[{cpData?.kode || '-'}] {cpData?.elemen || '-'}</span>
                       "{cpData?.deskripsi || '-'}"
                     </td>
                     <td className="border-2 border-black p-3 font-black uppercase">
                        <p className="mb-2">{item.materi}</p>
-                       <p className="text-[8px] text-blue-600 italic">Profil: {item.profilLulusan || '-'}</p>
+                       <p className="text-[8px] text-blue-600 italic">DPL: {item.profilLulusan || '-'}</p>
                     </td>
                     <td className="border-2 border-black p-3 leading-relaxed font-medium">{item.tujuanPembelajaran}</td>
                   </tr>
                 );
               })}
               {filteredAnalisis.length === 0 && (
-                <tr><td colSpan={4} className="p-10 text-center italic text-slate-400">Data analisis kosong untuk filter ini.</td></tr>
+                <tr><td colSpan={5} className="p-10 text-center italic text-slate-400">Data analisis kosong untuk filter ini.</td></tr>
               )}
             </tbody>
           </table>
@@ -247,7 +244,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
         <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[2.5rem] flex items-center gap-5 shadow-sm">
            <div className="p-3 bg-white rounded-2xl text-amber-600 shadow-sm"><Key size={24}/></div>
            <div>
-              <h3 className="font-black text-amber-800 uppercase text-sm tracking-tight leading-none">Fitur AI Belum Siap</h3>
+              <h3 className="font-black text-amber-800 uppercase text-sm tracking-tight leading-none">Infrastruktur AI Belum Siap</h3>
               <p className="text-xs text-amber-700 font-bold mt-1">Anda belum memasukkan personal Gemini API Key. Silakan lengkapi di Manajemen User agar AI dapat menganalisis CP secara otomatis.</p>
            </div>
         </div>
@@ -258,8 +255,8 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
           <div className="flex items-center gap-4">
             <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg"><BrainCircuit size={24} /></div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">ANALISIS CP-TP</h2>
-              <p className="text-[10px] text-emerald-600 font-black uppercase mt-1">Gudang Data: {user.school}</p>
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">ANALISIS CP-TP CERDAS</h2>
+              <p className="text-[10px] text-emerald-600 font-black uppercase mt-1">Tenant Database: {user.school}</p>
             </div>
           </div>
           <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-black shadow-lg transition-all"><Eye size={18} /> PRATINJAU</button>
@@ -310,7 +307,7 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   }`}
                 >
-                  {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} ANALISIS DENGAN AI
+                  {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} ANALISIS RUMUSAN TP
                 </button>
               </div>
             ))}
@@ -322,38 +319,44 @@ const AnalisisManager: React.FC<AnalisisManagerProps> = ({ user }) => {
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                <div className="flex items-center gap-3">
                  <ListChecks size={20} className="text-emerald-600"/>
-                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Hasil Analisis ({filteredAnalisis.length})</h3>
+                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Hasil Analisis TP Terurai ({filteredAnalisis.length})</h3>
                </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest h-12">
-                    <th className="px-6 py-2 w-[5%] text-center">No</th>
-                    <th className="px-6 py-2 w-[30%]">Materi & Profil</th>
-                    <th className="px-6 py-2 w-[55%]">TP Hasil Analisis</th>
+                    <th className="px-6 py-2 w-[5%] text-center border-r border-white/5">No</th>
+                    <th className="px-6 py-2 w-[10%] border-r border-white/5">Kode CP</th>
+                    <th className="px-6 py-2 w-[25%] border-r border-white/5">Materi & Dimensi Profil</th>
+                    <th className="px-6 py-2 w-[50%]">Tujuan Pembelajaran (Kompetensi + Konten)</th>
                     <th className="px-6 py-2 w-[10%] text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredAnalisis.length === 0 ? (
-                    <tr><td colSpan={4} className="py-32 text-center text-slate-300 font-bold uppercase text-xs tracking-widest">Belum ada hasil analisis untuk sekolah ini</td></tr>
+                    <tr><td colSpan={5} className="py-32 text-center text-slate-300 font-bold uppercase text-xs tracking-widest">Belum ada hasil analisis untuk sekolah ini</td></tr>
                   ) : filteredAnalisis.map((item, idx) => {
                     return (
                       <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors align-top">
-                        <td className="px-6 py-6 text-center font-black text-slate-300">{idx + 1}</td>
-                        <td className="px-6 py-6 space-y-3">
+                        <td className="px-6 py-6 text-center font-black text-slate-300 border-r border-slate-50">{idx + 1}</td>
+                        <td className="px-6 py-6 border-r border-slate-50">
+                           <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black border border-indigo-100 uppercase">
+                             {item.kodeCP || '-'}
+                           </span>
+                        </td>
+                        <td className="px-6 py-6 space-y-3 border-r border-slate-50">
                            <div>
                              <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Materi Pokok</label>
                              <textarea className="w-full bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-[10px] font-black text-emerald-800 uppercase resize-none h-16 outline-none" value={item.materi} onChange={e => updateDoc(doc(db, "analisis", item.id), { materi: e.target.value })} />
                            </div>
                            <div>
-                             <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Profil Lulusan (AI Analyzed)</label>
+                             <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Dimensi Profil Lulusan (DPL)</label>
                              <textarea className="w-full bg-blue-50/50 border border-blue-100 rounded-xl p-3 text-[9px] font-bold text-blue-700 italic resize-none h-16 outline-none" value={item.profilLulusan} onChange={e => updateDoc(doc(db, "analisis", item.id), { profilLulusan: e.target.value })} />
                            </div>
                         </td>
                         <td className="px-6 py-6">
-                           <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Tujuan Pembelajaran</label>
+                           <label className="text-[8px] font-black text-slate-400 block uppercase mb-1">Rumusan TP Rinci</label>
                            <textarea className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 leading-relaxed resize-none p-0 h-32" value={item.tujuanPembelajaran} onChange={e => updateDoc(doc(db, "analisis", item.id), { tujuanPembelajaran: e.target.value })} />
                         </td>
                         <td className="px-6 py-6 text-center">

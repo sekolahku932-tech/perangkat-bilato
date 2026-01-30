@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, ATPItem, AnalisisCP, CapaianPembelajaran, MATA_PELAJARAN, DIMENSI_PROFIL, SchoolSettings, User } from '../types';
 import { Plus, Trash2, Sparkles, Loader2, Save, Eye, EyeOff, Search, CheckCircle2, X, AlertTriangle, RefreshCcw, Info, ClipboardCopy, Cloud, DownloadCloud, FileDown, Printer, Edit2, Wand2, Lock, ListTree, Copy, AlertCircle, ArrowLeft } from 'lucide-react';
@@ -69,7 +68,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       if (active) setActiveYear(active.data().year);
     });
 
-    // ISOLASI DATA ATP PERSONAL
     const qAtp = query(collection(db, "atp"), where("userId", "==", user.id));
     const unsubATP = onSnapshot(qAtp, (snap) => {
       setAtpData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ATPItem[]);
@@ -80,7 +78,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
       setCps(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CapaianPembelajaran[]);
     });
 
-    // ISOLASI DATA ANALISIS PERSONAL
     const qAnalisis = query(collection(db, "analisis"), where("userId", "==", user.id));
     const unsubAnalisis = onSnapshot(qAnalisis, snap => {
       setAllAnalisis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AnalisisCP[]);
@@ -169,15 +166,11 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
   };
 
   const handleAIComplete = async (id: string) => {
-    if (!user.apiKey) {
-      setMessage({ text: '⚠️ API Key diperlukan untuk fitur AI!', type: 'warning' });
-      return;
-    }
     const item = atpData.find(i => i.id === id);
     if (!item || !item.tujuanPembelajaran) return;
     setIsProcessingId(id);
     try {
-      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas, user.apiKey);
+      const suggestions = await completeATPDetails(item.tujuanPembelajaran, item.materi, item.kelas);
       if (suggestions) {
         await updateField(id, 'alurTujuanPembelajaran', suggestions.alurTujuan);
         await updateField(id, 'alokasiWaktu', suggestions.alokasiWaktu);
@@ -191,20 +184,16 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (err) {
-      setMessage({ text: 'AI Error: Periksa API Key atau kuota.', type: 'error' });
+      setMessage({ text: 'AI Error: Server sibuk atau kendala jaringan.', type: 'error' });
     } finally { setIsProcessingId(null); }
   };
 
   const updateField = async (id: string, field: keyof ATPItem, value: any) => {
     try {
-      // 1. Update Dokumen ATP itu sendiri
       await updateDoc(doc(db, "atp", id), { [field]: value });
-
-      // 2. LOGIKA INTEGRASI OTOMATIS (CASCADING UPDATE)
       const syncFields = ['tujuanPembelajaran', 'materi', 'alokasiWaktu', 'kodeCP'];
       
       if (syncFields.includes(field)) {
-        // Cari Dokumen Prota yang tertaut
         const qProta = query(collection(db, "prota"), where("atpId", "==", id));
         const snapProta = await getDocs(qProta);
         snapProta.forEach(async (d) => {
@@ -214,7 +203,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
           await updateDoc(doc(db, "prota", d.id), { [protaField]: value });
         });
 
-        // Cari Dokumen Promes yang tertaut
         const qPromes = query(collection(db, "promes"), where("atpId", "==", id));
         const snapPromes = await getDocs(qPromes);
         snapPromes.forEach(async (d) => {
@@ -223,7 +211,6 @@ const ATPManager: React.FC<ATPManagerProps> = ({ user }) => {
           await updateDoc(doc(db, "promes", d.id), { [promesField]: value });
         });
 
-        // Update RPM juga jika ada
         const qRPM = query(collection(db, "rpm"), where("atpId", "==", id));
         const snapRPM = await getDocs(qRPM);
         snapRPM.forEach(async (d) => {

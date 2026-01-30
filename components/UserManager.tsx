@@ -17,7 +17,6 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
   
   const [formData, setFormData] = useState<Partial<User>>({
     username: '',
@@ -28,8 +27,7 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
     nip: '',
     kelas: '',
     school: user.school,
-    mapelDiampu: [],
-    apiKey: ''
+    mapelDiampu: []
   });
   
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -91,8 +89,7 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
         nip: formData.nip?.trim() || '-',
         kelas: formData.kelas?.trim() || '-',
         school: user.school, 
-        mapelDiampu: formData.mapelDiampu || [],
-        apiKey: formData.apiKey?.trim() || ''
+        mapelDiampu: formData.mapelDiampu || []
       };
 
       if (isEditing) {
@@ -129,8 +126,7 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
       nip: '',
       kelas: '',
       school: user.school,
-      mapelDiampu: [],
-      apiKey: ''
+      mapelDiampu: []
     });
     setIsEditing(null);
   };
@@ -228,23 +224,7 @@ const UserManager: React.FC<UserManagerProps> = ({ user }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 flex items-center gap-2">
-                  <Key size={10} className="text-indigo-600"/> Gemini API Key
-                </label>
-                <div className="relative">
-                  <input 
-                    type={showApiKey ? "text" : "password"}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-4 pr-12 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-600" 
-                    value={formData.apiKey} 
-                    onChange={e => setFormData({...formData, apiKey: e.target.value})} 
-                    placeholder="AIzaSy..." 
-                  />
-                  <button onClick={() => setShowApiKey(!showApiKey)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
+              {/* Fix: Removed Gemini API Key input UI element to comply with GenAI guidelines */}
 
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-4 ml-1">Mapel Diampu</label>

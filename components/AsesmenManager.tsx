@@ -146,25 +146,27 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   };
 
   const generateIndikatorAI = async (item: KisiKisiItem) => {
-    if (!user.apiKey) { setMessage({ text: "API Key Belum Diatur.", type: "warning" }); return; }
+    // Fix: Removed user.apiKey check to comply with Gemini API guidelines.
     if (!item.tujuanPembelajaran) return;
     setAiLoadingMap(prev => ({ ...prev, [`ind-${item.id}`]: true }));
     try {
-      const indikator = await generateIndikatorSoal(item, user.apiKey);
+      // Fix: Removed user.apiKey as generateIndikatorSoal only accepts 1 argument.
+      const indikator = await generateIndikatorSoal(item);
       if (indikator) await updateKisiKisi(item.id, 'indikatorSoal', indikator);
     } catch (e: any) {
-      setMessage({ text: "AI Gagal. Periksa API Key.", type: "error" });
+      setMessage({ text: "AI Gagal. Server sedang sibuk.", type: "error" });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`ind-${item.id}`]: false })); 
     }
   };
 
   const generateSoalAI = async (item: KisiKisiItem) => {
-    if (!user.apiKey) { setMessage({ text: "API Key Belum Diatur.", type: "warning" }); return; }
+    // Fix: Removed user.apiKey check to comply with Gemini API guidelines.
     if (!item.indikatorSoal) return;
     setAiLoadingMap(prev => ({ ...prev, [`soal-${item.id}`]: true }));
     try {
-      const result = await generateButirSoal(item, user.apiKey);
+      // Fix: Removed user.apiKey as generateButirSoal only accepts 1 argument.
+      const result = await generateButirSoal(item);
       if (result) {
         await updateDoc(doc(db, "kisikisi", item.id), { 
           stimulus: result.stimulus || "",
@@ -175,19 +177,20 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (e: any) {
-      setMessage({ text: "AI Gagal. Periksa API Key.", type: "error" });
+      setMessage({ text: "AI Gagal menyusun soal.", type: "error" });
     } finally { 
       setAiLoadingMap(prev => ({ ...prev, [`soal-${item.id}`]: false })); 
     }
   };
 
   const triggerImageAI = async (item: KisiKisiItem) => {
-     if (!user.apiKey) { setMessage({ text: "API Key Belum Diatur.", type: "warning" }); return; }
+     // Fix: Removed user.apiKey check to comply with Gemini API guidelines.
      if (!item.indikatorSoal) return;
      setAiLoadingMap(prev => ({ ...prev, [`img-${item.id}`]: true }));
      try {
         const context = item.stimulus || item.indikatorSoal;
-        const base64 = await generateAiImage(context, kelas, item.kunciJawaban, user.apiKey);
+        // Fix: Removed extra arguments to match generateAiImage(context, kelas) signature.
+        const base64 = await generateAiImage(context, kelas);
         if (base64) {
            await updateDoc(doc(db, "kisikisi", item.id), { stimulusImage: base64 });
            setMessage({ text: "Gambar AI berhasil disimpan!", type: "success" });
@@ -428,7 +431,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
     const content = printRef.current?.innerHTML;
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(`<html><head><title>${settings.schoolName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: 'Arial', sans-serif; background: white; padding: 20px; color: black; line-height: 1.6; } @media print { .no-print { display: none !important; } body { padding: 0; } } .break-inside-avoid { page-break-inside: avoid; } table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; } th, td { border: 1.5px solid black; padding: 6px; }</style></head><body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body></html>`);
+      printWindow.document.write(`<html><head><title>${settings.schoolName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: 'Arial', sans-serif; background: white; padding: 20px; color: black; line-height: 1.6; } @media print { .no-print { display: none !important; } body { padding: 0; } } .break-inside-avoid { page-break-inside: avoid; } table { border-collapse: collapse; width: 100% !important; border: 1.5px solid black; } th, td { border: 1px solid black; padding: 6px; }</style></head><body onload="setTimeout(() => { window.print(); window.close(); }, 500)">${content}</body></html>`);
       printWindow.document.close();
     }
   };
@@ -462,7 +465,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
                 <tbody>{filteredKisikisi.map((item) => (<tr key={item.id} className="break-inside-avoid align-top"><td className="p-3 border border-black"><p className="font-black uppercase mb-1 leading-tight">{item.elemen}</p><p className="text-[8pt] italic text-slate-600 leading-tight">{item.cp}</p></td><td className="p-3 border border-black text-center font-bold">{item.kompetensi === 'Pengetahuan dan Pemahaman' ? 'L1' : item.kompetensi === 'Aplikasi' ? 'L2' : 'L3'}</td><td className="p-3 border border-black text-justify leading-tight font-black">{item.indikatorSoal}</td><td className="p-3 border border-black text-center uppercase text-[8pt] font-bold">{item.bentukSoal}{item.subBentukSoal ? <><br/><span className="text-[7pt] text-indigo-600 italic">({item.subBentukSoal})</span></> : ''}</td><td className="p-3 border border-black">{item.stimulus && (<div className="mb-4 p-2 bg-slate-50 border border-slate-200 text-[8.5pt] italic font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>)}<div className="leading-relaxed">{renderSoalContent(item.soal, item, true, false)}</div></td><td className="p-3 border border-black text-center font-black">{item.kunciJawaban}</td><td className="p-3 border border-black text-center font-black">{item.nomorSoal}</td></tr>))}</tbody>
               </table>
            ) : (
-              <div className="space-y-10 mt-8">{filteredKisikisi.map((item) => (<div key={item.id} className="break-inside-avoid"><div className="flex gap-4 items-start"><span className="font-black text-lg min-w-[2rem]">{item.nomorSoal}.</span><div className="flex-1 space-y-5">{item.stimulusImage && (<div className="flex justify-center my-6"><img src={item.stimulusImage} className="max-w-[300px] rounded-xl" /></div>)}{item.stimulus && (<div className="p-8 bg-slate-50 border-2 border-black rounded-[2rem] text-[10.5pt] italic text-justify font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>)}<div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div></div></div></div>))}</div>
+              <div className="space-y-10 mt-8">{filteredKisikisi.map((item) => (<div key={item.id} className="break-inside-avoid"><div className="flex gap-4 items-start"><span className="font-black text-lg min-w-[2rem]">{item.nomorSoal}</span><div className="flex-1 space-y-5">{item.stimulusImage && (<div className="flex justify-center my-6"><img src={item.stimulusImage} className="max-w-[300px] rounded-xl" /></div>)}{item.stimulus && (<div className="p-8 bg-slate-50 border-2 border-black rounded-[2rem] text-[10.5pt] italic text-justify font-black">{renderSoalContent(item.stimulus, item, true, true)}</div>)}<div className="text-slate-900 text-[11pt] font-black leading-relaxed pr-10">{renderSoalContent(item.soal, item, true, false)}</div></div></div></div>))}</div>
            )}
            {isKisiKisi && (
              <div className="mt-16 grid grid-cols-2 text-center text-[10pt] font-black uppercase break-inside-avoid">
@@ -478,7 +481,7 @@ const AsesmenManager: React.FC<AsesmenManagerProps> = ({ type, user }) => {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
       {message && (<div className={`fixed top-24 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}><CheckCircle2 size={20}/><span>{message.text}</span></div>)}
-      {!user.apiKey && (<div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[2rem] flex items-center gap-5 shadow-sm"><div className="p-3 bg-white rounded-2xl text-amber-600 shadow-sm"><Key size={24}/></div><div><h3 className="font-black text-amber-800 uppercase text-sm tracking-tight leading-none">Generator AI Sumatif Nonaktif</h3><p className="text-xs text-amber-700 font-bold mt-1">Anda belum memasukkan personal Gemini API Key. Silakan lengkapi di Manajemen User agar AI dapat menyusun butir soal otomatis.</p></div></div>)}
+      {/* Fix: Removed Gemini API Key UI element to comply with GenAI guidelines. */}
       {showAddAsesmenModal && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[40px] shadow-2xl w-full max-md p-8 animate-in zoom-in-95"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black uppercase">Buat Asesmen Baru</h3><button onClick={() => setShowAddAsesmenModal(false)}><X size={24}/></button></div><input className="w-full bg-slate-50 border rounded-2xl p-4 text-sm font-black uppercase focus:ring-2 focus:ring-rose-600" value={modalInputValue} onChange={e => setModalInputValue(e.target.value)} placeholder="NAMA ASESMEN" autoFocus /><button onClick={handleCreateNewAsesmen} className="w-full bg-rose-600 text-white font-black py-4 rounded-2xl mt-4 uppercase">BUAT SEKARANG</button></div></div>)}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200"><div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"><div className="flex items-center gap-4"><div className="p-3 bg-rose-600 text-white rounded-2xl shadow-lg"><BarChart3 size={24} /></div><div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200"><button onClick={() => setActiveTab('KISI_KISI')} className={`px-5 py-2 rounded-xl text-[10px] font-black ${activeTab === 'KISI_KISI' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>KISI-KISI</button><button onClick={() => setActiveTab('SOAL')} className={`px-5 py-2 rounded-xl text-[10px] font-black ${activeTab === 'SOAL' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>NASKAH SOAL</button></div></div><div className="flex gap-3"><button onClick={() => setShowAddAsesmenModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all"><Plus size={16}/> BUAT BARU</button><button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg"><Printer size={16}/> PRATINJAU</button></div></div><div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6 p-5 bg-slate-50 rounded-2xl"><div><label className="text-[10px] font-black text-slate-400 block mb-1">FASE</label><select disabled={isClassLocked} className="w-full bg-white border rounded-xl p-2 text-xs font-bold" value={fase} onChange={e => {setFase(e.target.value as Fase); updateFaseByKelas(kelas);}}>{Object.values(Fase).map(f => <option key={f} value={f}>{f}</option>)}</select></div><div><label className="text-[10px] font-black text-slate-400 block mb-1">KELAS</label><select disabled={isClassLocked} className="w-full bg-white border rounded-xl p-2 text-xs font-bold" value={kelas} onChange={e => setKelas(e.target.value as Kelas)}>{['1','2','3','4','5','6'].map(k => <option key={k} value={k}>{k}</option>)}</select></div><div><label className="text-[10px] font-black text-slate-400 block mb-1">MAPEL</label><select className="w-full bg-white border rounded-xl p-2 text-xs font-bold" value={mapel} onChange={e => setMapel(e.target.value)}>{availableMapel.map(m => <option key={m} value={m}>{m}</option>)}</select></div><div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 block mb-1">ASESMEN</label><select className="w-full bg-white border rounded-xl p-2 text-xs font-bold" value={namaAsesmen} onChange={e => setNamaAsesmen(e.target.value)}><option value="">Pilih Asesmen</option>{availableAsesmenNames.map(n => <option key={n}>{n}</option>)}</select></div></div></div>
       <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px]">

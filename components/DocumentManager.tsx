@@ -59,12 +59,7 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
   const handleSendMessage = async () => {
     if (!input.trim() || isAnalyzing) return;
     
-    if (!user.apiKey) {
-      const errorMsg: ChatMessage = { role: 'model', content: "⚠️ Konfigurasi Diperlukan: Silakan isi API Key Anda di menu Manajemen User agar analisis ini menggunakan kuota personal Anda.", timestamp: new Date() };
-      setChatHistory(prev => [...prev, errorMsg]);
-      return;
-    }
-
+    // Fix: Removed user.apiKey dependency to comply with Gemini API guidelines.
     const userMsg: ChatMessage = { role: 'user', content: input, timestamp: new Date() };
     setChatHistory(prev => [...prev, userMsg]);
     const currentInput = input;
@@ -72,7 +67,8 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
     setIsAnalyzing(true);
 
     try {
-      const response = await analyzeDocuments(files, currentInput, user.apiKey);
+      // Fix: Removed user.apiKey as analyzeDocuments only accepts 2 arguments.
+      const response = await analyzeDocuments(files, currentInput);
       const aiMsg: ChatMessage = { role: 'model', content: response, timestamp: new Date() };
       setChatHistory(prev => [...prev, aiMsg]);
     } catch (error: any) {
@@ -89,15 +85,7 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({ user }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in duration-500">
       <div className="lg:col-span-1 space-y-6">
-        {!user.apiKey && (
-          <div className="bg-rose-50 border-2 border-rose-200 p-6 rounded-[2rem] flex items-start gap-4">
-            <Key size={24} className="text-rose-600 shrink-0"/>
-            <div>
-              <p className="text-[10px] font-black text-rose-800 uppercase leading-tight">API Key Belum Diatur</p>
-              <p className="text-[8px] text-rose-700 font-bold mt-1 uppercase">Silakan lengkapi di profil agar AI aktif.</p>
-            </div>
-          </div>
-        )}
+        {/* Fix: Removed Gemini API Key UI element to comply with GenAI guidelines. */}
         <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><FileUp size={20}/></div>

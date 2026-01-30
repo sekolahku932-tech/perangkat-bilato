@@ -1,4 +1,3 @@
-
 // @google/genai is not used directly here, but it's part of the global project context.
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, LKPDItem, RPMItem, MATA_PELAJARAN, SchoolSettings, User } from '../types';
@@ -136,10 +135,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
   };
 
   const handleGenerateAI = async (id: string) => {
-    if (!user.apiKey) {
-      setMessage({ text: '⚠️ API Key diperlukan!', type: 'warning' });
-      return;
-    }
     const lkpd = lkpdList.find(l => l.id === id);
     if (!lkpd) return;
     const rpm = rpmList.find(r => r.id === lkpd.rpmId);
@@ -150,7 +145,7 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
 
     setIsLoadingAI(true);
     try {
-      const result = await generateLKPDContent(rpm, user.apiKey);
+      const result = await generateLKPDContent(rpm);
       if (result) {
         await updateDoc(doc(db, "lkpd", id), { ...result });
         setMessage({ text: 'Konten LKPD Sinkron dengan Langkah RPM!', type: 'success' });
@@ -158,7 +153,7 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
       }
     } catch (err: any) {
       console.error(err);
-      setMessage({ text: 'AI Gagal: Kuota Limit 429 atau API Key salah.', type: 'error' });
+      setMessage({ text: "AI Gagal menyusun LKPD, silakan coba lagi.", type: "error" });
     } finally {
       setIsLoadingAI(false);
     }
@@ -183,7 +178,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
     const pattern = /Pertemuan\s*(\d+)\s*:?/gi;
     const parts = text.split(pattern);
     
-    // Jika tidak ada pola pemisah pertemuan, masukkan semua teks ke pertemuan pertama
     if (parts.length <= 1) {
       const result = Array(count).fill('');
       result[0] = text;
@@ -323,7 +317,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
 
   const currentLKPD = useMemo(() => lkpdList.find(l => l.id === isEditing), [lkpdList, isEditing]);
 
-  // UI PRATINJAU CETAK (IN-APP PREVIEW)
   if (isPrintMode && currentLKPD) {
     const count = currentLKPD.jumlahPertemuan || 1;
     const materiParts = splitByMeeting(currentLKPD.materiRingkas, count);
@@ -476,7 +469,6 @@ const LKPDManager: React.FC<LKPDManagerProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Tampilan Daftar LKPD di Dashboard */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col xl:flex-row gap-4 items-end font-sans">
          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
            <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Mapel</label><select className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-black outline-none" value={filterMapel} onChange={e => setFilterMapel(e.target.value)}>{MATA_PELAJARAN.map(m => <option key={m} value={m}>{m}</option>)}</select></div>

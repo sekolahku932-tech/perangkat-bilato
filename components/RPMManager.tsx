@@ -1,3 +1,4 @@
+
 // @google/genai is not used directly here, but it's part of the global project context.
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fase, Kelas, RPMItem, ATPItem, PromesItem, CapaianPembelajaran, MATA_PELAJARAN, DIMENSI_PROFIL, SchoolSettings, User } from '../types';
@@ -160,74 +161,52 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
             result[mNum - 1] = (parts[i + 1] || '').trim();
         }
     }
-    if (result.slice(1).every(r => r === '') && text.length > 50 && result[0] === '') {
-       result[0] = text;
-    }
     return result;
   };
 
   const processFilosofiTags = (content: string, isPrint: boolean = false) => {
     if (!content) return content;
     const mapping = [
-      { key: 'Berkesadaran', color: 'bg-indigo-50 text-indigo-700 border-indigo-400', regex: /\[Berkesadaran\]|Berkesadaran\.?/gi },
-      { key: 'Bermakna', color: 'bg-emerald-50 text-emerald-700 border-emerald-400', regex: /\[Bermakna\]|Bermakna\.?/gi },
-      { key: 'Menggembirakan', color: 'bg-rose-50 text-rose-700 border-rose-400', regex: /\[Menggembirakan\]|Menggembirakan\.?/gi }
+      { key: 'Berkesadaran', color: 'bg-white text-indigo-600 border-indigo-400', regex: /\[Berkesadaran\]/gi },
+      { key: 'Bermakna', color: 'bg-white text-emerald-600 border-emerald-400', regex: /\[Bermakna\]/gi },
+      { key: 'Menggembirakan', color: 'bg-white text-rose-600 border-rose-400', regex: /\[Menggembirakan\]/gi }
     ];
     let processedText = content;
     mapping.forEach(m => {
-      const badgeHtml = `<span class="inline-flex items-center px-3 py-1 ${m.color} font-black rounded-xl border-[2px] ${isPrint ? 'text-[8px]' : 'text-[10px]'} uppercase align-middle mx-1 whitespace-nowrap shadow-sm font-sans">${m.key}</span>`;
+      const badgeHtml = `<span class="inline-flex items-center px-4 py-0.5 ${m.color} font-black rounded-full border-[1.5px] ${isPrint ? 'text-[7pt]' : 'text-[9px]'} uppercase align-middle ml-2 whitespace-nowrap shadow-sm font-sans tracking-widest">${m.key}</span>`;
       processedText = processedText.replace(m.regex, badgeHtml);
     });
     return processedText;
   };
 
-  const renderListContent = (text: string | undefined, context: { counter: { current: number } }, isPrint: boolean = false, cleanMeetingTags: boolean = false) => {
+  const renderListContent = (text: string | undefined, counterObj: { current: number }, sectionColor: string, isPrint: boolean = false) => {
     if (!text || text === '-' || text.trim() === '') return '-';
-    let processedText = text;
-    if (cleanMeetingTags) processedText = text.replace(/Pertemuan\s*\d+\s*:?\s*/gi, '');
     
-    /**
-     * LOGIKA PERBAIKAN:
-     * Menggunakan regex untuk memecah teks berdasarkan header fase (A., B., C.) 
-     * ATAU nomor langkah (1., 2., 3.) secara cerdas meskipun dalam satu baris.
-     */
-    const headerPattern = /([A-C]\.\s+[A-Z\s]{3,}(?=\s\d+\.|\s|$))/g;
+    // Pembersihan narasi (Hapus label pertemuan jika ada)
+    let processedText = text.replace(/Pertemuan\s*\d+\s*:?\s*/gi, '');
+    
     const stepPattern = /(\d+[\.\)])\s+/g;
-    
-    // Pecah dulu berdasarkan penanda header fase agar blok A, B, C terpisah
     const headerParts = processedText.split(/([A-C]\.\s+[A-Z\s]{4,})/g).filter(p => p.trim().length > 0);
     
     let items: { type: 'header' | 'step', content: string }[] = [];
     
     for (let i = 0; i < headerParts.length; i++) {
         const part = headerParts[i].trim();
-        
-        // Cek apakah ini bagian header (misal "A. MEMAHAMI")
         if (part.match(/^[A-C]\.\s+[A-Z\s]{4,}$/)) {
             items.push({ type: 'header', content: part.toUpperCase() });
         } else {
-            // Jika bukan header, ini adalah blok langkah yang mungkin berisi nomor urut yang menumpuk
-            // Pecah blok ini berdasarkan angka urutan 1., 2., dst
             const subParts = part.split(stepPattern).filter(sp => sp.trim().length > 0);
-            
             let j = 0;
             while(j < subParts.length) {
                 const sub = subParts[j].trim();
-                // Jika sub adalah angka urutan (misal "1."), ambil teks setelahnya
                 if (sub.match(/^\d+[\.\)]$/)) {
                     const stepContent = subParts[j+1]?.trim() || '';
-                    if (stepContent) {
-                        items.push({ type: 'step', content: stepContent });
-                        j += 2;
-                    } else {
-                        j++;
-                    }
+                    if (stepContent) { items.push({ type: 'step', content: stepContent }); j += 2; } else { j++; }
                 } else {
-                    // Jika teks liar tanpa nomor di depannya
-                    if (items.length > 0 && items[items.length-1].type === 'step') {
-                        items[items.length-1].content += ' ' + sub;
-                    } else {
-                        items.push({ type: 'step', content: sub });
+                    if (items.length > 0 && items[items.length-1].type === 'step') { 
+                      items[items.length-1].content += ' ' + sub; 
+                    } else { 
+                      items.push({ type: 'step', content: sub }); 
                     }
                     j++;
                 }
@@ -235,32 +214,30 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         }
     }
 
-    if (items.length === 0) return '-';
-
     return (
-      <div className="flex flex-col space-y-6 w-full">
+      <div className={`relative pl-10 border-l-[8px] ${sectionColor} space-y-8 py-2`}>
         {items.map((item, i) => {
           if (item.type === 'header') {
             return (
-              <div key={i} className={`mt-8 mb-4 border-l-[8px] border-slate-900 pl-5 bg-slate-100/80 py-3 rounded-r-3xl block w-full shadow-sm`}>
-                <span className="font-black text-slate-900 text-[13px] tracking-[0.2em] uppercase font-sans leading-none">{item.content}</span>
+              <div key={i} className="mt-8 mb-4 border-b border-slate-200 pb-1">
+                <span className="font-black text-slate-900 text-[11px] tracking-[0.2em] uppercase font-sans">{item.content}</span>
               </div>
             );
           }
 
-          context.counter.current++;
-          const stepNum = context.counter.current;
+          counterObj.current++;
+          const stepNum = counterObj.current;
 
           return (
-            <div key={i} className="flex gap-6 items-start group break-inside-avoid w-full">
-              <div className="shrink-0 pt-1">
-                <div className={`font-black text-slate-800 ${isPrint ? 'h-8 w-8 text-[12px]' : 'h-11 w-11 text-[15px]'} bg-white rounded-full flex items-center justify-center border-[2px] border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.06)] group-hover:border-slate-900 group-hover:bg-slate-900 group-hover:text-white transition-all duration-300 font-sans`}>
+            <div key={i} className="flex gap-6 items-start group break-inside-avoid">
+              <div className="shrink-0 pt-0.5">
+                <div className={`font-black text-slate-800 ${isPrint ? 'h-7 w-7 text-[10pt]' : 'h-10 w-10 text-[14px]'} bg-white rounded-full flex items-center justify-center border-[2.5px] border-slate-200 shadow-sm font-sans`}>
                   {stepNum}
                 </div>
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div 
-                   className={`leading-relaxed text-justify text-slate-800 ${isPrint ? 'text-[10pt]' : 'text-[14px]'} font-semibold`} 
+                   className={`leading-relaxed text-justify text-slate-800 ${isPrint ? 'text-[11pt]' : 'text-[14px]'} font-semibold`} 
                    dangerouslySetInnerHTML={{ __html: processFilosofiTags(item.content, isPrint) }} 
                 />
               </div>
@@ -307,20 +284,6 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     const intiParts = splitByMeeting(rpm.kegiatanInti, count);
     const penutupParts = splitByMeeting(rpm.kegiatanPenutup, count);
 
-    const renderListForWord = (text: string, counter: { current: number }) => {
-      const lines = text.split(/\n/);
-      return lines.map((line) => {
-        const trimmed = line.trim();
-        if (/^[A-C]\.\s+/i.test(trimmed)) {
-          return `<div style="margin-top: 15px; margin-bottom: 10px; font-weight: bold; background-color: #f3f4f6; padding: 5px; border-left: 5px solid black;">${trimmed.toUpperCase()}</div>`;
-        }
-        const cleaned = trimmed.replace(/^(\d+[\.\)]|\-|\*|•)\s*/, '').trim();
-        if (!cleaned) return '';
-        counter.current++;
-        return `<div style="margin-bottom: 12px; text-align: justify; padding-left: 10px;"><b>${counter.current}.</b> ${processFilosofiTags(cleaned, false)}</div>`;
-      }).join('');
-    };
-
     const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>RPM</title><style>body { font-family: 'Arial', sans-serif; font-size: 10pt; } table { border-collapse: collapse; width: 100%; margin-bottom: 20px; } th, td { border: 1px solid black; padding: 6px; vertical-align: top; } .text-center { text-align: center; } .font-bold { font-weight: bold; } .bg-gray { background-color: #f3f4f6; } .tp-box { border: 2px solid #2563eb; background-color: #eff6ff; padding: 10px; font-weight: bold; text-align: center; margin-bottom: 15px; }</style></head><body>`;
     const footer = "</body></html>";
     
@@ -332,13 +295,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
       <div class="tp-box">${rpm.tujuanPembelajaran}</div>`;
 
     for (let mIdx = 0; mIdx < count; mIdx++) {
-      const wordCounter = { current: 0 };
       contentHtml += `
         <div style="margin-bottom: 20px; border: 1px solid #000; padding: 10px;">
           <div style="background-color: #000; color: #fff; padding: 5px 15px; font-weight: bold; margin-bottom: 10px;">PERTEMUAN ${mIdx + 1}</div>
-          <p><b>I. AWAL</b></p>${renderListForWord(awalParts[mIdx] || '-', wordCounter)}
-          <p><b>II. INTI (Siklus 3M)</b></p>${renderListForWord(intiParts[mIdx] || '-', wordCounter)}
-          <p><b>III. PENUTUP</b></p>${renderListForWord(penutupParts[mIdx] || '-', wordCounter)}
+          <p><b>I. AWAL</b></p><div>${awalParts[mIdx] || '-'}</div>
+          <p><b>II. INTI</b></p><div>${intiParts[mIdx] || '-'}</div>
+          <p><b>III. PENUTUP</b></p><div>${penutupParts[mIdx] || '-'}</div>
         </div>`;
     }
 
@@ -474,16 +436,12 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
   };
 
   const handleGenerateAI = async (id: string) => {
-    if (!user.apiKey) {
-      setMessage({ text: '⚠️ API Key diperlukan di profil!', type: 'warning' });
-      return;
-    }
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) return;
     setIsLoadingAI(true);
     try {
       const result = await generateRPMContent(
-        rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, rpm.praktikPedagogis || "Aktif", rpm.alokasiWaktu, rpm.jumlahPertemuan || 1, user.apiKey
+        rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, rpm.praktikPedagogis || "Aktif", rpm.alokasiWaktu, rpm.jumlahPertemuan || 1
       );
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { ...result }); 
@@ -496,17 +454,13 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
   };
 
   const handleGenerateAsesmenAI = async (id: string) => {
-    if (!user.apiKey) {
-      setMessage({ text: '⚠️ API Key diperlukan!', type: 'warning' });
-      return;
-    }
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.tujuanPembelajaran) return;
     
     const context = `Langkah Awal: ${rpm.kegiatanAwal} Langkah Inti: ${rpm.kegiatanInti} Langkah Penutup: ${rpm.kegiatanPenutup}`.trim();
     setIsLoadingAsesmenAI(true);
     try {
-      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, context, user.apiKey);
+      const result = await generateAssessmentDetails(rpm.tujuanPembelajaran, rpm.materi, rpm.kelas, context);
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { asesmenTeknik: result }); 
         setMessage({ text: 'Asesmen Sinkron Langkah AI Berhasil!', type: 'success' }); 
@@ -518,12 +472,11 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
   };
 
   const handleRecommendPedagogy = async (id: string) => {
-    if (!user.apiKey) return;
     const rpm = rpmList.find(r => r.id === id);
     if (!rpm || !rpm.atpId) return;
     setIsLoadingPedagogyAI(true);
     try {
-      const result = await recommendPedagogy(rpm.tujuanPembelajaran, "", rpm.materi, rpm.kelas, user.apiKey);
+      const result = await recommendPedagogy(rpm.tujuanPembelajaran, "", rpm.materi, rpm.kelas);
       if (result) { 
         await updateDoc(doc(db, "rpm", id), { praktikPedagogis: result.modelName }); 
         setMessage({ text: `Rekomendasi: ${result.modelName}`, type: 'info' }); 
@@ -566,13 +519,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
     const intiParts = splitByMeeting(rpm.kegiatanInti, count);
     const penutupParts = splitByMeeting(rpm.kegiatanPenutup, count);
     
-    const SidebarSection = ({ title }: { title: string }) => (
-      <div className="w-12 uppercase font-black text-[9px] text-black border-r-2 border-black shrink-0 text-center flex flex-col items-center justify-center bg-slate-50/50">
-        <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="font-sans">{title}</span>
-      </div>
-    );
-
-    const cleanAW = (rpm.alokasiWaktu || '').replace(/JP/gi, '').trim();
+    const globalCounter = { current: 0 };
 
     return (
       <div className="bg-white min-h-screen text-slate-900 p-8 font-sans print:p-0">
@@ -585,7 +532,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         </div>
 
         <div ref={printRef} className="max-w-[21cm] mx-auto bg-white p-4">
-          <div className="text-center mb-2 pb-2 border-b-2 border-black">
+          <div className="text-center mb-6 pb-2 border-b-2 border-black">
             <h1 className="text-xl font-black uppercase tracking-[0.2em] text-black font-sans">RENCANA PEMBELAJARAN MENDALAM</h1>
             <h2 className="text-sm font-bold uppercase text-slate-600 font-sans">{settings.schoolName}</h2>
           </div>
@@ -599,73 +546,50 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                 <tr className="border-b border-black"><td className="p-1.5 w-48 font-bold bg-slate-50 border-r-2 border-black uppercase text-[9px] font-sans">Mata Pelajaran</td><td className="p-1.5 font-bold uppercase">{rpm.mataPelajaran}</td></tr>
                 <tr className="border-b border-black"><td className="p-1.5 w-48 font-bold bg-slate-50 border-r-2 border-black uppercase text-[9px] font-sans">Kelas / Fase</td><td className="p-1.5 font-bold">{rpm.kelas} / {rpm.fase.replace('Fase ', '')}</td></tr>
                 <tr className="border-b border-black"><td className="p-1.5 w-48 font-bold bg-slate-50 border-r-2 border-black uppercase text-[9px] font-sans">Bab / Topik</td><td className="p-1.5 font-bold uppercase">{rpm.materi}</td></tr>
-                <tr><td className="p-1.5 w-48 font-bold bg-slate-50 border-r-2 border-black uppercase text-[9px] font-sans">Alokasi Waktu</td><td className="p-1.5 font-bold">{cleanAW} JP ({count} Pertemuan)</td></tr>
+                <tr><td className="p-1.5 w-48 font-bold bg-slate-50 border-r-2 border-black uppercase text-[9px] font-sans">Alokasi Waktu</td><td className="p-1.5 font-bold">{rpm.alokasiWaktu} ({count} Pertemuan)</td></tr>
               </tbody>
             </table>
           </div>
 
-          <div className="flex border-2 border-black mb-6 break-inside-avoid">
-            <SidebarSection title="IDENTIFIKASI" />
-            <div className="flex-1 p-4 space-y-4">
-              <div><p className="font-bold text-[9px] uppercase text-slate-500 mb-1 font-sans">Asesmen Awal:</p><div className="p-3 bg-slate-50 border-2 border-dotted border-slate-300 italic text-[10.5px] leading-tight rounded-xl">{rpm.asesmenAwal || '-'}</div></div>
-              <div><p className="font-bold text-[9px] uppercase text-slate-500 mb-2 font-sans">Dimensi Profil Lulusan (DPL):</p><div className="grid grid-cols-2 gap-x-4 gap-y-2">{DIMENSI_PROFIL.map((d, i) => (<div key={i} className="flex items-start gap-2">{rpm.dimensiProfil.includes(d) ? <CheckSquare size={12} className="text-blue-600 mt-0.5" /> : <Square size={12} className="text-slate-300 mt-0.5" />}<span className={`text-[9.5px] font-bold leading-tight ${rpm.dimensiProfil.includes(d) ? 'text-slate-900' : 'text-slate-400'}`}>{d}</span></div>))}</div></div>
-            </div>
-          </div>
+          <div className="space-y-12">
+             {Array.from({ length: count }).map((_, mIdx) => {
+               globalCounter.current = 0; // Nomor di-reset per pertemuan jika merujuk standar perangkat harian, 
+               // namun jika merujuk referensi visual berkelanjutan per bagian, kita teruskan counter.
+               return (
+                <div key={mIdx} className="space-y-10 break-inside-avoid pt-12">
+                  <div className="bg-slate-900 text-white px-8 py-2 inline-block rounded-full text-[11px] font-black uppercase tracking-widest font-sans">PERTEMUAN {mIdx + 1}</div>
+                  
+                  <div className="space-y-12">
+                     <section>
+                        <h4 className="text-[12px] font-black uppercase tracking-[0.2em] mb-4 text-blue-600 font-sans">I. AWAL</h4>
+                        {renderListContent(awalParts[mIdx], globalCounter, 'border-blue-600', true)}
+                     </section>
+                     
+                     <section>
+                        <h4 className="text-[12px] font-black uppercase tracking-[0.2em] mb-4 text-emerald-600 font-sans">II. INTI</h4>
+                        {renderListContent(intiParts[mIdx], globalCounter, 'border-emerald-600', true)}
+                     </section>
 
-          <div className="flex border-2 border-black mb-6 break-inside-avoid">
-            <SidebarSection title="DESAIN" />
-            <div className="flex-1 p-4 space-y-5">
-              <div><p className="font-black text-[9px] uppercase text-slate-500 mb-1 font-sans">Tujuan Pembelajaran (TP):</p><div className="p-4 border-2 border-blue-600 bg-blue-50/20 rounded-[1.5rem] text-blue-900 font-black text-[12px] text-center shadow-sm font-sans">{rpm.tujuanPembelajaran}</div></div>
-              <div><p className="font-black text-[9px] uppercase text-slate-500 mb-1 font-sans">Strategi Pedagogis:</p><p className="text-[10.5px] leading-tight text-justify italic font-medium bg-slate-50 p-3 rounded-xl border border-slate-200">{rpm.praktikPedagogis}</p></div>
-              <div className="grid grid-cols-3 gap-6 pt-2 border-t border-slate-100">
-                <div className="space-y-1"><p className="font-black text-[9px] uppercase text-black font-sans">Kemitraan:</p><p className="text-[10.5px] leading-tight">{rpm.kemitraan || '-'}</p></div>
-                <div className="space-y-1"><p className="font-black text-[9px] uppercase text-black font-sans">Lingkungan:</p><p className="text-[10.5px] leading-tight">{rpm.lingkunganBelajar || '-'}</p></div>
-                <div className="space-y-1"><p className="font-black text-[9px] uppercase text-black font-sans">Digital:</p><p className="text-[10.5px] leading-tight">{rpm.pemanfaatanDigital || '-'}</p></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex border-2 border-black break-inside-avoid mb-6">
-            <SidebarSection title="PENGALAMAN" />
-            <div className="flex-1">
-               {Array.from({ length: count }).map((_, mIdx) => {
-                 const counter = { current: 0 };
-                 const awalPartsMeeting = splitByMeeting(rpm.kegiatanAwal, count);
-                 const intiPartsMeeting = splitByMeeting(rpm.kegiatanInti, count);
-                 const penutupPartsMeeting = splitByMeeting(rpm.kegiatanPenutup, count);
-                 return (
-                  <div key={mIdx} className="p-5 space-y-6 border-b-2 last:border-b-0 border-black break-inside-avoid">
-                    <div className="flex items-center gap-4 font-sans"><div className="bg-slate-900 text-white border-2 border-black px-6 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">PERTEMUAN {mIdx + 1}</div><div className="flex-1 h-0.5 bg-slate-200"></div></div>
-                    <div className="space-y-8">
-                       <div className="relative pl-6 border-l-[8px] border-blue-600 rounded-sm font-sans">
-                          <p className="font-black text-blue-900 text-[12px] mb-3 uppercase tracking-[0.2em] border-b-2 border-blue-100 inline-block">I. AWAL</p>
-                          <div className="text-[12px] text-slate-800">{renderListContent(awalPartsMeeting[mIdx], { counter }, true, true)}</div>
-                       </div>
-                       <div className="relative pl-6 border-l-[8px] border-emerald-600 rounded-sm font-sans">
-                          <p className="font-black text-emerald-900 text-[12px] mb-3 uppercase tracking-[0.2em] border-b-2 border-emerald-100 inline-block">II. INTI</p>
-                          <div className="text-[12px] text-slate-800">{renderListContent(intiPartsMeeting[mIdx], { counter }, true, true)}</div>
-                       </div>
-                       <div className="relative pl-6 border-l-[8px] border-rose-600 rounded-sm font-sans">
-                          <p className="font-black text-rose-900 text-[12px] mb-3 uppercase tracking-[0.2em] border-b-2 border-rose-100 inline-block">III. PENUTUP</p>
-                          <div className="text-[12px] text-slate-800">{renderListContent(penutupPartsMeeting[mIdx], { counter }, true, true)}</div>
-                       </div>
-                    </div>
+                     <section>
+                        <h4 className="text-[12px] font-black uppercase tracking-[0.2em] mb-4 text-rose-600 font-sans">III. PENUTUP</h4>
+                        {renderListContent(penutupParts[mIdx], globalCounter, 'border-rose-600', true)}
+                     </section>
                   </div>
-                 );
-               })}
-            </div>
+                </div>
+               );
+             })}
           </div>
 
           {asesmenData && (
-            <div className="mt-6 border-2 border-black break-inside-avoid">
+            <div className="mt-12 border-2 border-black break-inside-avoid">
                <div className="bg-slate-900 text-white p-3 text-center font-black uppercase text-xs tracking-widest font-sans">STRATEGI ASESMEN</div>
                <div className="p-8 space-y-12">{renderAsesmenTable(asesmenData, true)}</div>
             </div>
           )}
 
           <div className="mt-12 grid grid-cols-2 text-center text-[10.5px] font-black uppercase tracking-tight break-inside-avoid px-8 font-sans">
-            <div><p>MENGETAHUI,</p><p>KEPALA SEKOLAH</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{settings.principalName}</p><p className="mt-0.5 font-normal tracking-tighter">NIP. {settings.principalNip}</p></div>
-            <div><p>BILATO, {datumDate}</p><p>GURU KELAS/MAPEL</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{user.name}</p><p className="mt-0.5 font-normal tracking-tighter">NIP. {user.nip || '...................'}</p></div>
+            <div><p>MENGETAHUI,</p><p>KEPALA SEKOLAH</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{settings.principalName}</p></div>
+            <div><p>BILATO, {datumDate}</p><p>GURU KELAS/MAPEL</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{user.name}</p></div>
           </div>
         </div>
       </div>
@@ -680,21 +604,11 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         'bg-red-50 border-red-200 text-red-800'
       }`}><CheckCircle2 size={20}/><span className="text-sm font-black uppercase tracking-tight font-sans">{message.text}</span></div>)}
       
-      {!user.apiKey && (
-        <div className="bg-rose-50 border-2 border-rose-200 p-6 rounded-[2rem] flex items-start gap-4 animate-pulse">
-          <AlertCircle className="text-rose-600 shrink-0" size={24}/>
-          <div>
-            <h3 className="text-sm font-black text-rose-800 uppercase tracking-tight font-sans">Konfigurasi AI Diperlukan</h3>
-            <p className="text-xs text-rose-700 font-medium mt-1">Anda belum memasukkan Gemini API Key di profil. Fitur "Uraikan dengan AI" tidak akan berfungsi. Silakan lengkapi di menu <button onClick={() => onNavigate('USER')} className="underline font-black">Manajemen User</button>.</p>
-          </div>
-        </div>
-      )}
-
       {deleteConfirmId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-sm overflow-hidden animate-in zoom-in-95"><div className="p-8 text-center"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 uppercase mb-2 font-sans">Hapus RPM</h3><p className="text-slate-500 font-medium text-sm leading-relaxed">Hapus baris RPM ini?</p></div><div className="p-4 bg-slate-50 flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 transition-all font-sans">BATAL</button><button onClick={executeDelete} className="flex-1 px-6 py-3 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 transition-all shadow-lg font-sans">HAPUS</button></div></div></div>)}
 
       {isEditing && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-6xl max-h-[95vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+          <div className="bg-white w-full max-w-7xl max-h-[95vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
                <div className="flex items-center gap-3"><div className="p-2 bg-cyan-500 rounded-xl shadow-lg"><Rocket size={20}/></div><div><h3 className="font-black uppercase text-sm tracking-widest leading-none font-sans">Editor RPM Mendalam</h3><p className="text-[10px] text-slate-400 font-bold tracking-tighter mt-1 uppercase font-sans">Struktur Narasi Terurai</p></div></div>
                <div className="flex gap-2 font-sans">
@@ -735,17 +649,17 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                       <div className="space-y-4">
                         <div className="flex items-center gap-4 text-blue-900 mb-6 bg-blue-50/50 p-4 rounded-2xl border-l-[10px] border-blue-600 font-sans">
                            <Brain size={28}/>
-                           <div><h5 className="font-black uppercase text-sm tracking-[0.2em]">I. AWAL (APPERSEPSI & RITUAL)</h5><p className="text-[10px] font-bold opacity-60">Gunakan label "Pertemuan 1:", "Pertemuan 2:" dst sebagai pembatas pertemuan.</p></div>
+                           <div><h5 className="font-black uppercase text-sm tracking-[0.2em]">I. AWAL (APPERSEPSI & RITUAL)</h5><p className="text-[10px] font-bold opacity-60">Gunakan tag [Berkesadaran], [Bermakna], [Menggembirakan] di akhir kegiatan.</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[150px] focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanAwal || ''} placeholder="Contoh: Pertemuan 1: 1. Doa bersama..." onChange={e => updateRPM(isEditing!, 'kegiatanAwal', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[150px] focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanAwal || ''} placeholder="Contoh: Pertemuan 1: 1. Guru menyapa dengan salam hangat [Berkesadaran]..." onChange={e => updateRPM(isEditing!, 'kegiatanAwal', e.target.value)} />
                       </div>
 
                       <div className="space-y-4">
                         <div className="flex items-center gap-4 text-emerald-900 mb-6 bg-emerald-50/50 p-4 rounded-2xl border-l-[10px] border-emerald-600 font-sans">
                            <Zap size={28}/>
-                           <div><h5 className="font-black uppercase text-sm tracking-[0.2em]">II. INTI (SIKLUS 3M: MEMAHAMI, MENGAPLIKASI, MEREFLEKSI)</h5><p className="text-[10px] font-bold opacity-60">Siklus 3M dijabarkan per pertemuan sesuai sintaks model {currentRpm?.praktikPedagogis}.</p></div>
+                           <div><h5 className="font-black uppercase text-sm tracking-[0.2em]">II. INTI (SIKLUS 3M: MEMAHAMI, MENGAPLIKASI, MEREFLEKSI)</h5><p className="text-[10px] font-bold opacity-60">Siklus 3M dijabarkan per pertemuan sesuai referensi visual (Sub A, B, C).</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border-emerald-300 border rounded-3xl p-6 text-[13px] min-h-[400px] focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanInti || ''} placeholder="Gunakan sub-header A. MEMAHAMI, B. MENGAPLIKASI, C. MEREFLEKSI untuk setiap pertemuan." onChange={e => updateRPM(isEditing!, 'kegiatanInti', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border-emerald-300 border rounded-3xl p-6 text-[13px] min-h-[400px] focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanInti || ''} placeholder="A. MEMAHAMI: 1. Siswa mengamati video [Bermakna]..." onChange={e => updateRPM(isEditing!, 'kegiatanInti', e.target.value)} />
                       </div>
 
                       <div className="space-y-4">
@@ -753,7 +667,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                            <RefreshCw size={28}/>
                            <div><h5 className="font-black uppercase text-sm tracking-[0.2em]">III. PENUTUP (KESIMPULAN & SELEBRASI)</h5><p className="text-[10px] font-bold opacity-60">Langkah penutup per pertemuan untuk refleksi hasil belajar.</p></div>
                         </div>
-                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[150px] focus:ring-4 focus:ring-rose-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanPenutup || ''} placeholder="Refleksi naratif panjang per pertemuan..." onChange={e => updateRPM(isEditing!, 'kegiatanPenutup', e.target.value)} />
+                        <textarea className="w-full bg-slate-50 border border-slate-200 rounded-3xl p-6 text-[13px] min-h-[150px] focus:ring-4 focus:ring-rose-500/10 outline-none transition-all font-medium leading-relaxed" value={currentRpm?.kegiatanPenutup || ''} placeholder="Refleksi naratif panjang per pertemuan [Bermakna]..." onChange={e => updateRPM(isEditing!, 'kegiatanPenutup', e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -811,7 +725,6 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         ))}
       </div>
 
-      {/* Hidden print area with updated logic */}
       <div className="hidden">
         <div ref={printRef} className="max-w-[21cm] mx-auto bg-white text-black p-8 font-sans">
           {currentRpm && (
@@ -839,30 +752,30 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                 <p className="text-[12px] font-bold text-justify">"{currentRpm.tujuanPembelajaran}"</p>
               </div>
 
-              <div className="space-y-12">
+              <div className="space-y-16">
                 {Array.from({ length: currentRpm.jumlahPertemuan || 1 }).map((_, mIdx) => {
                   const counter = { current: 0 };
                   const awalPartsMeeting = splitByMeeting(currentRpm.kegiatanAwal, currentRpm.jumlahPertemuan);
                   const intiPartsMeeting = splitByMeeting(currentRpm.kegiatanInti, currentRpm.jumlahPertemuan);
                   const penutupPartsMeeting = splitByMeeting(currentRpm.kegiatanPenutup, currentRpm.jumlahPertemuan);
                   return (
-                    <div key={mIdx} className="break-inside-avoid border-t-2 border-slate-100 pt-8">
+                    <div key={mIdx} className="break-inside-avoid pt-12">
                        <div className="bg-black text-white px-8 py-2 rounded-full font-black text-[12px] mb-8 uppercase tracking-widest inline-block">PERTEMUAN {mIdx + 1}</div>
                        
-                       <div className="space-y-10">
+                       <div className="space-y-12">
                           <section>
                             <p className="font-black text-blue-700 text-[11px] uppercase tracking-widest mb-6 border-b border-blue-100 inline-block pb-1">I. KEGIATAN AWAL (APPERSEPSI)</p>
-                            <div>{renderListContent(awalPartsMeeting[mIdx], { counter }, true, true)}</div>
+                            <div>{renderListContent(awalPartsMeeting[mIdx], counter, 'border-blue-600', true)}</div>
                           </section>
                           
                           <section>
-                            <p className="font-black text-emerald-700 text-[11px] uppercase tracking-widest mb-6 border-b border-emerald-100 inline-block pb-1">II. INTI</p>
-                            <div>{renderListContent(intiPartsMeeting[mIdx], { counter }, true, true)}</div>
+                            <p className="font-black text-emerald-700 text-[11px] uppercase tracking-widest mb-6 border-b border-emerald-100 inline-block pb-1">II. INTI (SIKLUS 3M)</p>
+                            <div>{renderListContent(intiPartsMeeting[mIdx], counter, 'border-emerald-600', true)}</div>
                           </section>
 
                           <section>
                             <p className="font-black text-rose-700 text-[11px] uppercase tracking-widest mb-6 border-b border-rose-100 inline-block pb-1">III. KEGIATAN PENUTUP</p>
-                            <div>{renderListContent(penutupPartsMeeting[mIdx], { counter }, true, true)}</div>
+                            <div>{renderListContent(penutupPartsMeeting[mIdx], counter, 'border-rose-600', true)}</div>
                           </section>
                        </div>
                     </div>
@@ -878,8 +791,8 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
               )}
 
               <div className="mt-20 grid grid-cols-2 text-center text-[10px] font-black uppercase tracking-tight break-inside-avoid">
-                <div><p>MENGETAHUI,</p><p>KEPALA SEKOLAH</p><div className="h-24"></div><p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p><p className="mt-1 font-normal">NIP. {settings.principalNip}</p></div>
-                <div><p>BILATO, {getRPMDate(currentRpm)}</p><p>GURU KELAS/MAPEL</p><div className="h-24"></div><p className="border-b border-black inline-block min-w-[200px]">{user.name}</p><p className="mt-1 font-normal">NIP. {user.nip || '................'}</p></div>
+                <div><p>MENGETAHUI,</p><p>KEPALA SEKOLAH</p><div className="h-24"></div><p className="border-b border-black inline-block min-w-[200px]">{settings.principalName}</p></div>
+                <div><p>BILATO, {getRPMDate(currentRpm)}</p><p>GURU KELAS/MAPEL</p><div className="h-24"></div><p className="border-b border-black inline-block min-w-[200px]">{user.name}</p></div>
               </div>
             </>
           )}

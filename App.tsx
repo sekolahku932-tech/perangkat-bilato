@@ -14,6 +14,7 @@ import AnalisisManager from './components/AnalisisManager';
 import ATPManager from './components/ATPManager';
 import SettingsManager from './components/SettingsManager';
 import UserManager from './components/UserManager';
+import ProfileManager from './components/ProfileManager';
 import HariEfektifManager from './components/HariEfektifManager';
 import ProtaManager from './components/ProtaManager';
 import PromesManager from './components/PromesManager';
@@ -32,7 +33,7 @@ const App: React.FC = () => {
   const [selectedSchool, setSelectedSchool] = useState<string | null>(localStorage.getItem('selected_school'));
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState<'DASHBOARD' | 'CP' | 'ANALISIS' | 'ATP' | 'SETTING' | 'USER' | 'EFEKTIF' | 'PROTA' | 'PROMES' | 'RPM' | 'LKPD' | 'ASESMEN' | 'EVALUASI' | 'JURNAL'>('DASHBOARD');
+  const [activeMenu, setActiveMenu] = useState<'DASHBOARD' | 'CP' | 'ANALISIS' | 'ATP' | 'SETTING' | 'USER' | 'PROFILE' | 'EFEKTIF' | 'PROTA' | 'PROMES' | 'RPM' | 'LKPD' | 'ASESMEN' | 'EVALUASI' | 'JURNAL'>('DASHBOARD');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -93,6 +94,7 @@ const App: React.FC = () => {
     { id: 'JURNAL', label: 'Jurnal Harian', icon: <BookText size={20} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { id: 'ASESMEN', label: 'Asesmen Sumatif', icon: <FileCheck size={20} />, color: 'text-rose-600', bg: 'bg-rose-50' },
     { id: 'EVALUASI', label: 'Evaluasi & Nilai', icon: <ClipboardCheck size={20} />, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { id: 'PROFILE', label: 'Profil & API Key', icon: <UserCircle size={20} />, color: 'text-slate-600', bg: 'bg-slate-100' },
     { id: 'USER', label: 'Manajemen User', icon: <Users size={20} />, color: 'text-slate-600', bg: 'bg-slate-100', adminOnly: true },
     { id: 'SETTING', label: 'Pengaturan Sekolah', icon: <Settings size={20} />, color: 'text-slate-700', bg: 'bg-slate-200', adminOnly: true },
   ];
@@ -152,17 +154,20 @@ const App: React.FC = () => {
             })}
           </nav>
           <div className="p-6 border-t border-slate-100 shrink-0">
-            <div className="bg-slate-50 rounded-[2rem] p-4 flex items-center gap-3 mb-6 group">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm relative">
-                <UserIcon size={24} />
+            <button 
+              onClick={() => setActiveMenu('PROFILE')}
+              className="w-full bg-slate-50 rounded-[2rem] p-4 flex items-center gap-3 mb-6 group hover:bg-indigo-50 transition-all border border-transparent hover:border-indigo-100"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm relative group-hover:border-indigo-300">
+                <UserIcon size={24} className="group-hover:text-indigo-600" />
               </div>
-              <div className="overflow-hidden flex-1">
+              <div className="overflow-hidden flex-1 text-left">
                 <p className="text-[10px] font-black text-slate-900 truncate uppercase">{user.name}</p>
                 <div className="flex items-center gap-1">
                   <p className="text-[8px] text-indigo-600 font-black uppercase tracking-tighter">{user.role}</p>
                 </div>
               </div>
-            </div>
+            </button>
             <button onClick={() => setShowLogoutConfirm(true)} className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl text-[10px] font-black text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-100 uppercase tracking-widest">
               <LogOut size={18} /> Keluar Sistem
             </button>
@@ -193,10 +198,10 @@ const App: React.FC = () => {
             {activeMenu === 'ATP' && <ATPManager user={user} />}
             {activeMenu === 'SETTING' && <SettingsManager user={user} />}
             {activeMenu === 'USER' && <UserManager user={user} />}
+            {activeMenu === 'PROFILE' && <ProfileManager user={user} />}
             {activeMenu === 'EFEKTIF' && <HariEfektifManager user={user} />}
             {activeMenu === 'PROTA' && <ProtaManager user={user} />}
             {activeMenu === 'PROMES' && <PromesManager user={user} />}
-            {/* Fix: Passed setActiveMenu as onNavigate prop to satisfy RPMManager requirements */}
             {activeMenu === 'RPM' && <RPMManager user={user} onNavigate={setActiveMenu} />}
             {activeMenu === 'LKPD' && <LKPDManager user={user} />}
             {activeMenu === 'JURNAL' && <JurnalManager user={user} />}

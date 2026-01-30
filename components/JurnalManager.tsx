@@ -58,6 +58,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
       const yearList = snap.docs.map(d => ({ id: d.id, ...d.data() })) as AcademicYear[];
       setYears(yearList.filter(y => (y as any).school === user.school));
       const active = yearList.find(y => y.isActive && (y as any).school === user.school);
+      // Fix: Directly access the year property on the mapped AcademicYear object instead of calling .data()
       if (active) setActiveYear(active.year);
     });
 
@@ -189,12 +190,14 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
   };
 
   const handleGenerateNarrative = async (item: JurnalItem) => {
-    // Fix: Removed user.apiKey dependency to comply with GenAI guidelines.
+    if (!user.apiKey) {
+      setMessage({ text: '⚠️ Gagal: API Key belum diatur!', type: 'warning' });
+      return;
+    }
     setIsLoadingAI(item.id);
     try {
       const refRpm = rpmData.find(r => r.materi.trim() === item.materi.trim() && r.mataPelajaran === item.mataPelajaran);
-      // Fix: Corrected function call to use 4 arguments as per services/geminiService.ts
-      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm);
+      const result = await generateJournalNarrative(item.kelas, item.mataPelajaran, item.materi, refRpm, user.apiKey);
       if (result) {
         await updateDoc(doc(db, "jurnal_harian", item.id), {
           detailKegiatan: result.detail_kegiatan,
@@ -203,7 +206,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
         setMessage({ text: 'Narasi diringkas dari RPM Anda oleh AI!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
       }
-    } catch (e: any) { setMessage({ text: "AI sedang sibuk, silakan coba lagi nanti.", type: "error" }); } 
+    } catch (e: any) { setMessage({ text: 'Gagal memanggil AI.', type: 'error' }); } 
     finally { setIsLoadingAI(null); }
   };
 
@@ -417,7 +420,7 @@ const JurnalManager: React.FC<JurnalManagerProps> = ({ user }) => {
                  )}
                </tbody>
              </table>
-             <div className="mt-12 grid grid-cols-2 text-center text-[9pt] font-black uppercase break-inside-avoid tracking-tighter">
+             <div className="mt-12 grid grid-cols-2 text-center text-[9pt] font-black uppercase break-inside-avoid">
                 <div><p>Mengetahui,</p><p>Kepala Sekolah</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{settings.principalName}</p><p className="mt-0.5 font-normal">NIP. {settings.principalNip}</p></div>
                 <div><p>Bilato, ........................</p><p>Guru Kelas / Mata Pelajaran</p><div className="h-20"></div><p className="border-b border-black inline-block min-w-[180px]">{user.name}</p><p className="mt-0.5 font-normal">NIP. {user.nip}</p></div>
              </div>

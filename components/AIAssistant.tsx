@@ -44,7 +44,16 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    // Fix: Removed user.apiKey dependency as it's provided via environment variable.
+    // VALIDASI API KEY INDIVIDU
+    if (!user.apiKey) {
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        text: '⚠️ KONFIGURASI DIPERLUKAN: Anda belum memasukkan Gemini API Key di menu Manajemen User. AI tidak dapat merespon tanpa kunci aktif.', 
+        isError: true 
+      }]);
+      return;
+    }
+
     const userMessage = input;
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
@@ -52,9 +61,9 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
 
     try {
       if (!chatInstance.current) {
-        // Fix: Removed user.apiKey as startAIChat only accepts 1 argument.
         chatInstance.current = await startAIChat(
-          `Anda asisten AI ${user.school}. Guru: ${user.name}.`
+          `Anda asisten AI ${user.school}. Guru: ${user.name}.`,
+          user.apiKey
         );
       }
       const result = await chatInstance.current.sendMessageStream({ message: userMessage });
@@ -85,7 +94,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
           <div className="p-2 bg-indigo-500 rounded-xl"><SparklesIcon size={18} /></div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest leading-none">Asisten AI</h3>
-            <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">Powered by Gemini</p>
+            <p className="text-[8px] text-indigo-300 font-bold uppercase tracking-tighter">Personal Key Engine</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -96,7 +105,14 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
       </div>
       {!isMinimized && (
         <>
-          {/* Fix: Removed Gemini API Key warning to comply with GenAI guidelines. */}
+          {!user.apiKey && (
+            <div className="bg-amber-50 p-4 border-b border-amber-100 flex items-start gap-3">
+              <AlertTriangle className="text-amber-600 shrink-0" size={18}/>
+              <p className="text-[10px] font-bold text-amber-800 leading-tight uppercase">
+                Peringatan: Anda belum mengatur API KEY. Silakan hubungi admin atau isi di Manajemen Profil untuk menggunakan AI.
+              </p>
+            </div>
+          )}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 no-scrollbar">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>

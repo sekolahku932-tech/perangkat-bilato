@@ -31,15 +31,34 @@ const cleanAndParseJson = (str: any): any => {
 };
 
 /**
- * Mendapatkan client AI dengan API Key spesifik.
- * Secara eksplisit melarang penggunaan API Key utama jika tidak disediakan.
+ * Logika Retry Otomatis (Exponential Backoff)
+ * Menangani error 429 (Rate Limit) dengan mencoba kembali secara otomatis.
  */
-const getAiClient = (apiKey?: string) => {
-  if (!apiKey || apiKey.trim() === "") {
-    // Melempar error spesifik agar aplikasi tahu bahwa kuota personal diperlukan
-    throw new Error("PERSONAL_API_KEY_REQUIRED");
+const generateWithRetry = async (aiModel: any, params: any, maxRetries = 3) => {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await aiModel.generateContent(params);
+    } catch (err: any) {
+      lastError = err;
+      // Cek apakah error 429 (Rate Limit) atau 503 (Server Busy)
+      const isRetryable = err.message?.includes('429') || err.status === 429 || err.message?.includes('503') || err.status === 503;
+      if (isRetryable && i < maxRetries - 1) {
+        const waitTime = (i + 1) * 2500; // Menunggu 2.5s, 5s, dst.
+        console.warn(`AI Busy/Rate Limit. Percobaan ${i+1} gagal. Mencoba lagi dalam ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw err;
+    }
   }
-  // Hanya gunakan apiKey yang diberikan oleh guru di profil/database mereka
+  throw lastError;
+};
+
+const getAiClient = (apiKey?: string) => {
+  if (!apiKey || apiKey.trim() === "" || apiKey === 'PLACEHOLDER_API_KEY') {
+    throw new Error("API_KEY_PERSONAL_REQUIRED");
+  }
   return new GoogleGenAI({ apiKey: apiKey.trim() });
 };
 
@@ -60,7 +79,7 @@ export const analyzeDocuments = async (files: UploadedFile[], prompt: string, ap
   const fileParts = files.map(file => ({
     inlineData: { data: file.base64.split(',')[1], mimeType: file.type }
   }));
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     contents: { parts: [...fileParts, { text: prompt }] },
     config: { systemInstruction: "Pakar Kurikulum SD Indonesia. Analisis dokumen dengan tajam dan solutif." }
@@ -72,7 +91,7 @@ export const analyzeCPToTP = async (cpContent: string, elemen: string, fase: str
   const ai = getAiClient(apiKey);
   const prompt = `Analisis Capaian Pembelajaran (CP) untuk Kelas ${kelas} SD. CP: "${cpContent}" Elemen: "${elemen}"`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: COMPLEX_MODEL,
     config: {
       responseMimeType: "application/json",
@@ -100,7 +119,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
   const ai = getAiClient(apiKey);
   const prompt = `Lengkapi rincian ATP SD Kelas ${kelas}. TP: "${tp}" Materi: "${materi}"`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     config: {
       responseMimeType: "application/json",
@@ -125,7 +144,7 @@ export const completeATPDetails = async (tp: string, materi: string, kelas: stri
 
 export const recommendPedagogy = async (tp: string, alurAtp: string, materi: string, kelas: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     config: {
       responseMimeType: "application/json",
@@ -155,7 +174,7 @@ export const generateRPMContent = async (tp: string, materi: string, kelas: stri
   5. Bagian INTI: Gunakan sub-label: A. MEMAHAMI, B. MENGAPLIKASI, C. MEREFLEKSI.
   6. Pertemuan: Gunakan label "Pertemuan X:" sebagai pemisah antar pertemuan.`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: COMPLEX_MODEL,
     config: { 
       responseMimeType: "application/json",
@@ -181,7 +200,7 @@ export const generateJournalNarrative = async (kelas: string, mapel: string, mat
   const ai = getAiClient(apiKey);
   const contextPrompt = `Tulis narasi log jurnal harian mengajar Kelas ${kelas}, Mapel ${mapel}, Materi ${materi}.`;
   
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     config: {
       responseMimeType: "application/json",
@@ -208,7 +227,7 @@ export const generateAssessmentDetails = async (tp: string, materi: string, kela
   2. Gunakan label kategori PERSIS seperti aturan nomor 1 (Asesmen Awal, Asesmen Proses, Asesmen Akhir).
   3. Rubrik Detail harus memiliki minimal 3 aspek penilaian.`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: COMPLEX_MODEL,
     config: { 
       responseMimeType: "application/json",
@@ -255,7 +274,7 @@ export const generateLKPDContent = async (rpm: any, apiKey?: string) => {
   
   Gunakan format daftar bernomor vertikal (1., 2., 3.) untuk instruksi tugas agar mudah dibaca siswa.`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     config: { 
       responseMimeType: "application/json",
@@ -281,7 +300,7 @@ export const generateIndikatorSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
   const prompt = `Buat 1 baris indikator soal AKM Kelas ${item.kelas} TP: "${item.tujuanPembelajaran}".`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: DEFAULT_MODEL,
     contents: prompt
   });
@@ -292,7 +311,7 @@ export const generateButirSoal = async (item: any, apiKey?: string) => {
   const ai = getAiClient(apiKey);
   const prompt = `Susun butir soal Kelas ${item.kelas}. Indikator: "${item.indikatorSoal}". Bentuk: ${item.bentukSoal}`;
 
-  const response = await ai.models.generateContent({
+  const response = await generateWithRetry(ai.models, {
     model: COMPLEX_MODEL,
     config: {
       responseMimeType: "application/json",
@@ -314,7 +333,7 @@ export const generateButirSoal = async (item: any, apiKey?: string) => {
 export const generateAiImage = async (context: string, kelas: Kelas, kunci?: string, apiKey?: string) => {
   const ai = getAiClient(apiKey);
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateWithRetry(ai.models, {
       model: IMAGE_MODEL,
       config: { imageConfig: { aspectRatio: "1:1" } },
       contents: { parts: [{ text: `Flat education clipart SD Kelas ${kelas}: ${context.substring(0, 100)}` }] },

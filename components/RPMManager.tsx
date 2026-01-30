@@ -469,7 +469,14 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         setTimeout(() => setMessage(null), 3000);
       }
     } catch (err: any) { 
-      setMessage({ text: 'AI Gagal: Kuota Limit 429 atau Server Sibuk.', type: 'error' }); 
+      // Penanganan Error yang Lebih Mendalam
+      let errorText = 'AI Sedang Padat. Mencoba menembus server...';
+      if (err.message?.includes('429')) {
+        errorText = '⚠️ Batas Kuota Tercapai. Silakan tunggu 1 menit lalu coba lagi.';
+      } else if (err.message?.includes('API_KEY')) {
+        errorText = '⚠️ API Key Guru Tidak Valid. Periksa di menu Profil.';
+      }
+      setMessage({ text: errorText, type: 'error' }); 
     } finally { setIsLoadingAI(false); }
   };
 
@@ -502,7 +509,9 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
         setMessage({ text: 'AI mengembalikan data kosong. Coba lagi.', type: 'warning' });
       }
     } catch (err: any) { 
-      setMessage({ text: 'Gagal Menyusun Asesmen AI.', type: 'error' }); 
+      let errorText = 'Gagal Menyusun Asesmen AI.';
+      if (err.message?.includes('429')) errorText = '⚠️ Rate limit tercapai. Tunggu sebentar.';
+      setMessage({ text: errorText, type: 'error' }); 
     } finally { setIsLoadingAsesmenAI(false); }
   };
 
@@ -692,7 +701,7 @@ const RPMManager: React.FC<RPMManagerProps> = ({ user, onNavigate }) => {
                </div>
             </div>
             <div className="p-8 overflow-y-auto space-y-10 no-scrollbar bg-slate-50/50">
-              {isLoadingAI && (<div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[200] flex flex-col items-center justify-center gap-6 animate-in fade-in"><div className="relative"><div className="w-24 h-24 border-4 border-cyan-100 border-t-cyan-600 rounded-full animate-spin"></div><Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-600 animate-pulse" size={32} /></div><div className="text-center font-sans"><h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">AI Berjalan (Naratif Mode)</h3><p className="text-slate-500 font-medium max-w-xs leading-relaxed italic text-sm uppercase">Menjabarkan rincian aktivitas guru & siswa yang panjang and sinkron per pertemuan...</p></div></div>)}
+              {isLoadingAI && (<div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[200] flex flex-col items-center justify-center gap-6 animate-in fade-in"><div className="relative"><div className="w-24 h-24 border-4 border-cyan-100 border-t-cyan-600 rounded-full animate-spin"></div><Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-600 animate-pulse" size={32} /></div><div className="text-center font-sans"><h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">AI Berjalan (Naratif Mode)</h3><p className="text-slate-500 font-medium max-w-xs leading-relaxed italic text-sm uppercase">Menjabarkan rincian aktivitas guru & siswa yang panjang dan sinkron per pertemuan...</p></div></div>)}
               {currentRpm ? (
                 <>
                   <div className="space-y-6 bg-white p-8 rounded-[3rem] border border-slate-200">
